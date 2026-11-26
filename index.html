@@ -6,7 +6,7 @@
 <title>BTC 선물 매물대 차트</title>
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--btn:#21262d;--btn2:#30363d;--bid:#26a69a;--ask:#ef5350}
-:root[data-theme=light]{--bg:#ffffff;--panel:#f6f8fa;--line:#d0d7de;--ink:#1f2328;--dim:#57606a;--btn:#ffffff;--btn2:#eaeef2}
+:root[data-theme=light]{--bg:#eceff2;--panel:#e2e6ea;--line:#c6cdd4;--ink:#1f2328;--dim:#4b545d;--btn:#f5f6f8;--btn2:#dde2e7}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 body{display:flex;flex-direction:column}
@@ -20,32 +20,35 @@ button{background:var(--btn);color:var(--ink);border:1px solid var(--line);borde
 button:active{background:var(--btn2)}
 #wrap{position:relative;flex:1;min-height:300px}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:ns-resize}
-footer{padding:4px 10px;font-size:11px;color:var(--dim);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 14px}
+footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);background:var(--panel);border-top:1px solid var(--line);display:flex;gap:12px;align-items:flex-end}
+.legend{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:2px 22px}
+.legend p{margin:0}
+.legend .sw{margin-right:2px}
+#status{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:3px}
 #status.err{color:#ff7b72}
 </style>
 </head>
 <body>
 <header>
-  <b>BTCUSDT 무기한 <small style="color:var(--dim);font-weight:400">v12</small></b>
+  <b>BTCUSDT Perpetual</b>
   <label>봉 <select id="interval"><option>1m</option><option>5m</option><option selected>15m</option><option>1h</option><option>4h</option></select></label>
   <label>봉 개수 <select id="n"><option selected>60</option><option>90</option><option>120</option><option>150</option><option>180</option><option>210</option><option>240</option><option>300</option><option>400</option><option>500</option></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
   <label>범위 <select id="range"><option value="0.5">±0.5%</option><option value="1" selected>±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
-  <label>히트맵 <select id="pal"><option value="classic">주황·보라</option><option value="viridis">비리디스</option><option value="inferno">열화상</option><option value="bluered">파랑·빨강</option><option value="mono">흑백</option></select></label>
-  <button id="theme" type="button">라이트 모드</button>
+    <button id="theme" type="button">라이트 모드</button>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="100000" value="0" style="width:96px"></label>
 </header>
 <div id="wrap"><canvas id="cv"></canvas></div>
 <footer>
-  <span><i class="sw" style="background:var(--bid)"></i>선물 매수벽 <i class="sw" style="background:rgba(38,166,154,.4)"></i>현물 매수벽</span>
-  <span><i class="sw" style="background:var(--ask)"></i>선물 매도벽 <i class="sw" style="background:rgba(239,83,80,.4)"></i>현물 매도벽</span>
-  <span><i class="sw" id="swL"></i>롱 청산 추정 <i class="sw" id="swS"></i>숏 청산 추정</span>
-  <span>상위 3개 벽: 실선·테두리 = 2분 이상 유지 / 점선 = 신규</span>
-  <span>회색 취소선 = 가격이 안 닿았는데 사라진 벽(스푸핑 의심) · 노랑 = 체결된 벽</span>
-  <span>≥ = 접속 전부터 있던 벽</span>
-  <span>휠·드래그 = 위아래 이동, 더블클릭 = 복귀</span>
-  <span>흐린 회색 띠 = 가격이 닿아 소진된 청산 매물 (세로 눈금 = 닿은 시점)</span>
+  <div class="legend">
+    <p><i class="sw" style="background:var(--bid)"></i><i class="sw" style="background:var(--ask)"></i>오른쪽의 진한 초록·빨강 막대는 선물 호가의 매수벽·매도벽이고, <i class="sw" style="background:rgba(38,166,154,.4)"></i><i class="sw" style="background:rgba(239,83,80,.4)"></i>옅은 막대는 현물 호가의 매수벽·매도벽입니다.</p>
+    <p><i class="sw" id="swL"></i>파란 띠는 롱 포지션 청산이 몰려 있을 것으로 추정되는 가격대, <i class="sw" id="swS"></i>빨간 띠는 숏 포지션 청산이 몰려 있을 것으로 추정되는 가격대이며, 색이 진할수록 규모가 큽니다.</p>
+    <p>흐린 회색 띠는 가격이 이미 닿아 소진된 청산 물량이고, 띠 끝의 세로 눈금이 가격이 닿은 시점입니다. ▼·▲ 삼각형은 실제로 체결된 롱·숏 청산입니다.</p>
+    <p>매수·매도 쪽마다 가장 큰 매물벽 3개는 점선으로 표시되고, 2분 이상 유지되면 실선과 테두리로 바뀝니다. 유지 시간 앞의 ≥ 표시는 차트를 열기 전부터 있던 벽이라는 뜻입니다.</p>
+    <p>회색 취소선이 그어진 라벨은 가격이 닿기 전에 사라진 벽으로 스푸핑일 가능성이 있고, 노란 라벨은 가격이 닿아 체결된 벽입니다.</p>
+    <p>차트는 마우스 휠이나 드래그로 위아래로 움직일 수 있고, 더블클릭하면 현재가 중심으로 돌아옵니다.</p>
+  </div>
   <span id="status">연결 중…</span>
 </footer>
 
@@ -57,27 +60,23 @@ const SAPI = 'https://api.binance.com';
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
-const ST = { interval:'15m', n:60, bucket:0, range:1, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'classic' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+const ST = { interval:'15m', n:60, bucket:0, range:1, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let viewSpan = 1, viewPh = 1;
 const THEMES = {
-  dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#6e7681', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
+  dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#a3adb8', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
            bidS:'#5df2c6', askS:'#ff8a80', bidLn:'93,242,198', askLn:'255,138,128', mark:'#ffffff', sumTxt:'#ffd27a', sumLn:'#ffb000',
            ghost:'#a5adb8', ghostF:'#e3b341', hint:'#58a6ff', price:'#e3b341', priceTxt:'#0d1117', spotB:'rgba(38,166,154,.4)', spotA:'rgba(239,83,80,.4)' },
-  light: { bg:'#ffffff', grid:'#eef1f4', mute:'#8c959f', line:'#d0d7de', lbg:'rgba(255,255,255,.9)', ink:'#57606a', inkS:'#1f2328',
+  light: { bg:'#eceff2', grid:'#dce1e6', mute:'#4f5862', line:'#c6cdd4', lbg:'rgba(236,239,242,.92)', ink:'#57606a', inkS:'#1f2328',
            bidS:'#0a8f6c', askS:'#cf222e', bidLn:'10,143,108', askLn:'207,34,46', mark:'#1f2328', sumTxt:'#7d5600', sumLn:'#bf8700',
            ghost:'#6e7781', ghostF:'#9a6700', hint:'#0969da', price:'#d4a72c', priceTxt:'#1f2328', spotB:'rgba(38,166,154,.35)', spotA:'rgba(239,83,80,.35)' }
 };
 // 히트맵 팔레트: [위치, [R,G,B]] 구간. L = 롱 청산(아래), S = 숏 청산(위). 한 가지만 있으면 양쪽 공통.
 const PALS = {
-  classic: { L:[[0,[120,40,0]],[.5,[255,140,20]],[1,[255,232,100]]], S:[[0,[70,20,120]],[.5,[180,80,255]],[1,[255,150,235]]] },
-  viridis: { A:[[0,[68,1,84]],[.33,[59,82,139]],[.66,[33,145,140]],[1,[253,231,37]]] },
-  inferno: { A:[[0,[40,11,84]],[.4,[187,55,84]],[.7,[249,142,9]],[1,[252,255,164]]] },
-  bluered: { L:[[0,[10,45,120]],[1,[90,205,255]]], S:[[0,[120,10,25]],[1,[255,125,115]]] },
-  mono:    { A:[[0,[90,90,90]],[1,[255,255,255]]], AL:[[0,[170,170,170]],[1,[0,0,0]]] }
+  bluered: { L:[[0,[10,45,120]],[1,[90,205,255]]], S:[[0,[120,10,25]],[1,[255,125,115]]] }   // 롱 청산 = 파랑, 숏 청산 = 빨강
 };
 let T = THEMES.dark;
 function palRGB(side, r){
-  const P = PALS[ST.pal] || PALS.classic;
+  const P = PALS.bluered;
   const st = (ST.theme === 'light' && P.AL) || P.A || (side === 'L' ? P.L : P.S);
   for (let i = 1; i < st.length; i++){
     if (r <= st[i][0]){
@@ -374,7 +373,7 @@ function render(){
   const L = [];   // 숫자 라벨은 모아뒀다가 맨 마지막에 그림
   // 그리드
   const gs = nice((hi - lo) / 8);
-  ctx.font = '10px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (let p = Math.ceil(lo / gs) * gs; p <= hi; p += gs){
     const yy = Math.round(y(p)) + .5;
     ctx.strokeStyle = T.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke();
@@ -582,13 +581,13 @@ function render(){
     }
   });
   // 호가 스냅샷 범위 끝 (이 바깥은 데이터가 불완전)
-  ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.setLineDash([2, 3]);
+  ctx.font = '600 11px sans-serif'; ctx.textAlign = 'left'; ctx.setLineDash([2, 3]);
   for (const [bkx, name] of [[futBook, '선물'], [spotBook, '현물']]){
     if (!bkx.ready || (name === '선물' ? !ST.fut : !ST.spot)) continue;
     for (const e of [bkx.edgeLo, bkx.edgeHi]){
       if (e <= lo || e >= hi) continue;
       const yy = y(e); ctx.strokeStyle = T.mute; ctx.beginPath(); ctx.moveTo(cw, yy); ctx.lineTo(W, yy); ctx.stroke();
-      ctx.fillStyle = T.mute; ctx.fillText(name + ' 호가 데이터 끝', cw + 4, yy + (e < P ? 8 : -8));
+      ctx.fillStyle = T.mute; ctx.fillText(name + ' 호가 데이터 끝', cw + 4, yy + (e < P ? 9 : -9));
     }
   }
   ctx.setLineDash([]);
@@ -614,16 +613,8 @@ function render(){
 }
 
 function updateStatus(){
-  const s = [];
-  s.push('선물호가 ' + (futBook.ready ? '✓ ' + futBook.bids.size + '/' + futBook.asks.size : '동기화 중'));
-  s.push('현물호가 ' + (spotBook.ready ? '✓ ' + spotBook.bids.size + '/' + spotBook.asks.size : '동기화 중'));
-  s.push('청산모델 ' + (liqReady ? '✓' : '…'));
-  const ka = lastKlineMsg ? Math.round((Date.now() - lastKlineMsg) / 1000) : -1;
-  s.push(ka >= 0 && ka < 10 ? `캔들 실시간 ✓` : `캔들 웹소켓 ${marketOpen ? '연결됨·수신없음' : '끊김'} (REST 대체 중)`);
-  s.push(`청산 스트림 ${marketOpen ? '✓' : '✗'} 전체 ${forceAll}건`);
-  s.push(new Date().toLocaleTimeString('ko-KR'));
-  const el = $('status');
-  el.textContent = lastErr ? '⚠ ' + lastErr + ' · ' + s.join(' · ') : s.join(' · ');
+  const el = $('status'), t = new Date().toLocaleTimeString('ko-KR');
+  el.textContent = lastErr ? '⚠ ' + lastErr + ' · ' + t : t;
   el.className = lastErr ? 'err' : '';
 }
 
@@ -667,15 +658,12 @@ const store = { get(k){ try { return localStorage.getItem(k); } catch (e){ retur
 function applyLook(){
   document.documentElement.dataset.theme = ST.theme;
   $('theme').textContent = ST.theme === 'dark' ? '라이트 모드' : '다크 모드';
-  $('pal').value = ST.pal;
   $('swL').style.background = heat('L', 1, 1); $('swS').style.background = heat('S', 1, 1);
   dirty = true;
 }
 ST.theme = store.get('btcTheme') === 'light' ? 'light' : 'dark';
-ST.pal = PALS[store.get('btcPal')] ? store.get('btcPal') : 'classic';
 applyLook();
 $('theme').addEventListener('click', () => { ST.theme = ST.theme === 'dark' ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
-$('pal').addEventListener('change', e => { ST.pal = e.target.value; store.set('btcPal', ST.pal); applyLook(); });
 $('interval').addEventListener('change', e => { ST.interval = e.target.value; changeInterval(); });
 }
 </script>
