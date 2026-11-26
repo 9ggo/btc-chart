@@ -24,6 +24,11 @@ footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);backgrou
 .legend{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:2px 22px}
 .legend p{margin:0}
 .legend .sw{margin-right:2px}
+footer.folded .legend{display:none}
+footer.folded{align-items:center}
+#legendBtn{flex:none;align-self:flex-start;font-size:12px;padding:3px 8px}
+footer.folded #legendBtn{align-self:center}
+footer.folded #status{margin-left:auto}
 #status{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:3px}
 #status.err{color:#ff7b72}
@@ -40,7 +45,8 @@ footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);backgrou
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="100000" value="0" style="width:96px"></label>
 </header>
 <div id="wrap"><canvas id="cv"></canvas></div>
-<footer>
+<footer id="foot">
+  <button id="legendBtn" type="button">설명 접기</button>
   <div class="legend">
     <p><i class="sw" style="background:var(--bid)"></i><i class="sw" style="background:var(--ask)"></i>오른쪽의 진한 초록·빨강 막대는 선물 호가의 매수벽·매도벽이고, <i class="sw" style="background:rgba(38,166,154,.4)"></i><i class="sw" style="background:rgba(239,83,80,.4)"></i>옅은 막대는 현물 호가의 매수벽·매도벽입니다.</p>
     <p><i class="sw" id="swL"></i>파란 띠는 롱 포지션 청산이 몰려 있을 것으로 추정되는 가격대, <i class="sw" id="swS"></i>빨간 띠는 숏 포지션 청산이 몰려 있을 것으로 추정되는 가격대이며, 색이 진할수록 규모가 큽니다.</p>
@@ -663,6 +669,10 @@ function applyLook(){
 }
 ST.theme = store.get('btcTheme') === 'light' ? 'light' : 'dark';
 applyLook();
+// 하단 설명 접기/펼치기 (기억)
+function setFold(f){ $('foot').classList.toggle('folded', f); $('legendBtn').textContent = f ? '설명 보기' : '설명 접기'; dirty = true; }
+setFold(store.get('btcFold') === '1');
+$('legendBtn').addEventListener('click', () => { const f = !$('foot').classList.contains('folded'); store.set('btcFold', f ? '1' : '0'); setFold(f); });
 $('theme').addEventListener('click', () => { ST.theme = ST.theme === 'dark' ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
 $('interval').addEventListener('change', e => { ST.interval = e.target.value; changeInterval(); });
 }
