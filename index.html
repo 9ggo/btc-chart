@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BTC 선물 매물대 차트</title>
 <style>
-:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--bid:#26a69a;--ask:#ef5350}
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--btn:#21262d;--btn2:#30363d;--bid:#26a69a;--ask:#ef5350}
+:root[data-theme=light]{--bg:#ffffff;--panel:#f6f8fa;--line:#d0d7de;--ink:#1f2328;--dim:#57606a;--btn:#ffffff;--btn2:#eaeef2}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 body{display:flex;flex-direction:column}
@@ -15,8 +16,8 @@ label{display:inline-flex;align-items:center;gap:4px;color:var(--dim);white-spac
 select,input[type=number]{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:13px}
 input[type=number]{width:64px}
 input[type=checkbox]{accent-color:#58a6ff}
-button{background:#21262d;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font:600 13px/1.4 inherit;cursor:pointer;font-variant-numeric:tabular-nums}
-button:active{background:#30363d}
+button{background:var(--btn);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font:600 13px/1.4 inherit;cursor:pointer;font-variant-numeric:tabular-nums}
+button:active{background:var(--btn2)}
 #wrap{position:relative;flex:1;min-height:300px}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:ns-resize}
 footer{padding:4px 10px;font-size:11px;color:var(--dim);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 14px}
@@ -26,18 +27,20 @@ footer{padding:4px 10px;font-size:11px;color:var(--dim);background:var(--panel);
 </head>
 <body>
 <header>
-  <b>BTCUSDT 무기한 <small style="color:#8b949e;font-weight:400">v11</small></b>
+  <b>BTCUSDT 무기한 <small style="color:var(--dim);font-weight:400">v12</small></b>
   <label>봉 <select id="interval"><option>1m</option><option>5m</option><option selected>15m</option><option>1h</option><option>4h</option></select></label>
   <label>봉 개수 <select id="n"><option selected>60</option><option>90</option><option>120</option><option>150</option><option>180</option><option>210</option><option>240</option><option>300</option><option>400</option><option>500</option></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
   <label>범위 <select id="range"><option value="0.5">±0.5%</option><option value="1" selected>±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
+  <label>히트맵 <select id="pal"><option value="classic">주황·보라</option><option value="viridis">비리디스</option><option value="inferno">열화상</option><option value="bluered">파랑·빨강</option><option value="mono">흑백</option></select></label>
+  <button id="theme" type="button">라이트 모드</button>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="100000" value="0" style="width:96px"></label>
 </header>
 <div id="wrap"><canvas id="cv"></canvas></div>
 <footer>
   <span><i class="sw" style="background:var(--bid)"></i>선물 매수벽 <i class="sw" style="background:rgba(38,166,154,.4)"></i>현물 매수벽</span>
   <span><i class="sw" style="background:var(--ask)"></i>선물 매도벽 <i class="sw" style="background:rgba(239,83,80,.4)"></i>현물 매도벽</span>
-  <span><i class="sw" style="background:#ff9f1c"></i>롱 청산 추정 <i class="sw" style="background:#b56cff"></i>숏 청산 추정</span>
+  <span><i class="sw" id="swL"></i>롱 청산 추정 <i class="sw" id="swS"></i>숏 청산 추정</span>
   <span>상위 3개 벽: 실선·테두리 = 2분 이상 유지 / 점선 = 신규</span>
   <span>회색 취소선 = 가격이 안 닿았는데 사라진 벽(스푸핑 의심) · 노랑 = 체결된 벽</span>
   <span>≥ = 접속 전부터 있던 벽</span>
@@ -54,8 +57,45 @@ const SAPI = 'https://api.binance.com';
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
-const ST = { interval:'15m', n:60, bucket:0, range:1, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0 };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+const ST = { interval:'15m', n:60, bucket:0, range:1, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'classic' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let viewSpan = 1, viewPh = 1;
+const THEMES = {
+  dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#6e7681', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
+           bidS:'#5df2c6', askS:'#ff8a80', bidLn:'93,242,198', askLn:'255,138,128', mark:'#ffffff', sumTxt:'#ffd27a', sumLn:'#ffb000',
+           ghost:'#a5adb8', ghostF:'#e3b341', hint:'#58a6ff', price:'#e3b341', priceTxt:'#0d1117', spotB:'rgba(38,166,154,.4)', spotA:'rgba(239,83,80,.4)' },
+  light: { bg:'#ffffff', grid:'#eef1f4', mute:'#8c959f', line:'#d0d7de', lbg:'rgba(255,255,255,.9)', ink:'#57606a', inkS:'#1f2328',
+           bidS:'#0a8f6c', askS:'#cf222e', bidLn:'10,143,108', askLn:'207,34,46', mark:'#1f2328', sumTxt:'#7d5600', sumLn:'#bf8700',
+           ghost:'#6e7781', ghostF:'#9a6700', hint:'#0969da', price:'#d4a72c', priceTxt:'#1f2328', spotB:'rgba(38,166,154,.35)', spotA:'rgba(239,83,80,.35)' }
+};
+// 히트맵 팔레트: [위치, [R,G,B]] 구간. L = 롱 청산(아래), S = 숏 청산(위). 한 가지만 있으면 양쪽 공통.
+const PALS = {
+  classic: { L:[[0,[120,40,0]],[.5,[255,140,20]],[1,[255,232,100]]], S:[[0,[70,20,120]],[.5,[180,80,255]],[1,[255,150,235]]] },
+  viridis: { A:[[0,[68,1,84]],[.33,[59,82,139]],[.66,[33,145,140]],[1,[253,231,37]]] },
+  inferno: { A:[[0,[40,11,84]],[.4,[187,55,84]],[.7,[249,142,9]],[1,[252,255,164]]] },
+  bluered: { L:[[0,[10,45,120]],[1,[90,205,255]]], S:[[0,[120,10,25]],[1,[255,125,115]]] },
+  mono:    { A:[[0,[90,90,90]],[1,[255,255,255]]], AL:[[0,[170,170,170]],[1,[0,0,0]]] }
+};
+let T = THEMES.dark;
+function palRGB(side, r){
+  const P = PALS[ST.pal] || PALS.classic;
+  const st = (ST.theme === 'light' && P.AL) || P.A || (side === 'L' ? P.L : P.S);
+  for (let i = 1; i < st.length; i++){
+    if (r <= st[i][0]){
+      const [a, ca] = st[i - 1], [b, cb] = st[i], f = (r - a) / (b - a || 1);
+      return ca.map((v, j) => Math.round(v + (cb[j] - v) * f));
+    }
+  }
+  return st[st.length - 1][1];
+}
+function heat(side, r, am){
+  r = Math.min(1, Math.max(0, r)) ** 0.6;
+  const [R, G, B] = palRGB(side, r);
+  return `rgba(${R},${G},${B},${((0.12 + 0.68 * r) * am).toFixed(3)})`;
+}
+function liqText(side){   // 라벨 글자색: 팔레트의 밝은 쪽, 라이트 모드에선 어둡게
+  const c = palRGB(side, .85), k = ST.theme === 'light' ? .55 : 1;
+  return `rgb(${c.map(v => Math.round(v * k)).join(',')})`;
+}
 let candles = [], lastPrice = 0, dirty = true, lastErr = '';
 const forces = [];                       // 실제 체결된 청산 (forceOrder)
 const liqE = new Map(); // 추정 청산 매물: {side, p, t(생긴 시각), usd, end(가격이 닿아 소진된 시각, 0=미소진)}
@@ -312,10 +352,11 @@ function render(){
   const W = cv.clientWidth, H = cv.clientHeight, now0 = Date.now();
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  T = THEMES[ST.theme];
+  ctx.fillStyle = T.bg; ctx.fillRect(0, 0, W, H);
   updateStatus();
   if (!candles.length || !lastPrice){
-    ctx.fillStyle = '#8b949e'; ctx.font = '14px sans-serif'; ctx.fillText('데이터 불러오는 중…', 16, 30); return;
+    ctx.fillStyle = T.mute; ctx.font = '14px sans-serif'; ctx.fillText('데이터 불러오는 중…', 16, 30); return;
   }
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
   const cw = W - panelW, top = 8, bot = H - 8, ph = bot - top;
@@ -336,10 +377,10 @@ function render(){
   ctx.font = '10px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (let p = Math.ceil(lo / gs) * gs; p <= hi; p += gs){
     const yy = Math.round(y(p)) + .5;
-    ctx.strokeStyle = '#1c2128'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke();
-    ctx.fillStyle = '#6e7681'; ctx.fillText(fp(p), cw - 4, yy - 7);
+    ctx.strokeStyle = T.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke();
+    ctx.fillStyle = T.mute; ctx.fillText(fp(p), cw - 4, yy - 7);
   }
-  ctx.strokeStyle = '#30363d'; ctx.beginPath(); ctx.moveTo(cw + .5, 0); ctx.lineTo(cw + .5, H); ctx.stroke();
+  ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(cw + .5, 0); ctx.lineTo(cw + .5, H); ctx.stroke();
 
   const plotW = cw - 56, slot = plotW / ST.n, bw = Math.max(1, slot * 0.7), off = ST.n - vis.length;
   const xOf = i => (off + i) * slot + slot / 2;
@@ -359,11 +400,7 @@ function render(){
     }
     const arr = [...act.values()];
     const mx = Math.max(0, ...arr.map(o => o.u));
-    const col = (side, r, am) => {
-      r = Math.min(1, r) ** 0.6;
-      const hue = side === 'L' ? 18 + 37 * r : 265 + 45 * r;   // 롱: 주황→노랑, 숏: 보라→분홍
-      return `hsla(${hue.toFixed(0)},100%,${(30 + 38 * r).toFixed(0)}%,${((0.12 + 0.68 * r) * am).toFixed(3)})`;
-    };
+    const col = heat;
     if (mx > 0){
       // 소진된 매물: 같은 가격 구간·같은 소진 시각끼리 묶어 한 번만 그림 (겹쳐서 진해지는 것 방지)
       const dg = new Map();
@@ -408,8 +445,8 @@ function render(){
         L.push(() => {
           ctx.textAlign = 'left'; ctx.font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
           const tw = ctx.measureText(t).width, x = Math.max(2, Math.min(lx, cw - tw - 70));
-          ctx.fillStyle = 'rgba(13,17,23,.85)'; ctx.fillRect(x, ym - fs / 2 - 2, tw + 8, fs + 4);
-          ctx.fillStyle = o.side === 'L' ? '#ffb454' : '#c99bff'; ctx.fillText(t, x + 4, ym);
+          ctx.fillStyle = T.lbg; ctx.fillRect(x, ym - fs / 2 - 2, tw + 8, fs + 4);
+          ctx.fillStyle = liqText(o.side); ctx.fillText(t, x + 4, ym);
         });
       }
     }
@@ -438,8 +475,8 @@ function render(){
       else { ctx.moveTo(x - s, yy + s); ctx.lineTo(x + s, yy + s); ctx.lineTo(x, yy - s * .4); }
       ctx.closePath();
       ctx.fillStyle = f.long ? '#ffb000' : '#d17bff'; ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
-      if (f.usd >= 1e5){ ctx.fillStyle = '#fff'; ctx.fillText(fu(f.usd), x, f.long ? yy - s - 7 : yy + s + 8); }
+      ctx.strokeStyle = T.mark; ctx.lineWidth = 1; ctx.stroke();
+      if (f.usd >= 1e5){ ctx.fillStyle = T.mark; ctx.fillText(fu(f.usd), x, f.long ? yy - s - 7 : yy + s + 8); }
     }
     // 접속 후 누적 요약 (켜고 끄면 바로 보이도록)
     const hr = now0 - 3600000; let lu = 0, su = 0, n = 0;
@@ -449,9 +486,9 @@ function render(){
     L.push(() => {
       ctx.font = '700 12px sans-serif'; ctx.textAlign = 'left';
       const tw = ctx.measureText(t).width;
-      ctx.fillStyle = 'rgba(13,17,23,.9)'; ctx.fillRect(4, 4, tw + 12, 20);
-      ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, tw + 11, 19);
-      ctx.fillStyle = '#ffd27a'; ctx.fillText(t, 10, 14);
+      ctx.fillStyle = T.lbg; ctx.fillRect(4, 4, tw + 12, 20);
+      ctx.strokeStyle = T.sumLn; ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, tw + 11, 19);
+      ctx.fillStyle = T.sumTxt; ctx.fillText(t, 10, 14);
     });
   }
 
@@ -491,7 +528,7 @@ function render(){
     for (const o of bars){
       const y0 = y((o.k + 1) * B), h = Math.max(1, y(o.k * B) - y0 - 1);
       let x = cw + 1;
-      for (const [v, col] of [[o.fb, '#26a69a'], [o.sb, 'rgba(38,166,154,.4)'], [o.fa, '#ef5350'], [o.sa, 'rgba(239,83,80,.4)']]){
+      for (const [v, col] of [[o.fb, '#26a69a'], [o.sb, T.spotB], [o.fa, '#ef5350'], [o.sa, T.spotA]]){
         if (!v) continue; const w = full * v / mx; ctx.fillStyle = col; ctx.fillRect(x, y0, w, h); x += w;
       }
     }
@@ -511,15 +548,15 @@ function render(){
       ctx.font = `${st ? 700 : 500} ${fs}px sans-serif`;
       const tw = ctx.measureText(t).width;
       if (st){
-        ctx.strokeStyle = o.side === 'b' ? `rgba(93,242,198,${old ? .8 : .45})` : `rgba(255,138,128,${old ? .8 : .45})`;
+        ctx.strokeStyle = `rgba(${o.side === 'b' ? T.bidLn : T.askLn},${old ? .8 : .45})`;
         ctx.lineWidth = 1 + 2 * r; ctx.setLineDash(old ? [] : [5, 4]);
         ctx.beginPath(); ctx.moveTo(0, ym); ctx.lineTo(cw, ym); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
       }
       L.push(() => {
         ctx.font = `${st ? 700 : 500} ${fs}px sans-serif`; ctx.textAlign = 'right';
-        ctx.fillStyle = 'rgba(13,17,23,.85)'; ctx.fillRect(W - tw - 10, ym - fs / 2 - 2, tw + 8, fs + 4);
-        if (st && old){ ctx.strokeStyle = o.side === 'b' ? '#5df2c6' : '#ff8a80'; ctx.lineWidth = 1; ctx.strokeRect(W - tw - 10 + .5, ym - fs / 2 - 2 + .5, tw + 7, fs + 3); }
-        ctx.fillStyle = st ? (o.side === 'b' ? '#5df2c6' : '#ff8a80') : (old ? '#e6edf3' : '#9da7b3');
+        ctx.fillStyle = T.lbg; ctx.fillRect(W - tw - 10, ym - fs / 2 - 2, tw + 8, fs + 4);
+        if (st && old){ ctx.strokeStyle = o.side === 'b' ? T.bidS : T.askS; ctx.lineWidth = 1; ctx.strokeRect(W - tw - 10 + .5, ym - fs / 2 - 2 + .5, tw + 7, fs + 3); }
+        ctx.fillStyle = st ? (o.side === 'b' ? T.bidS : T.askS) : (old ? T.inkS : T.ink);
         ctx.fillText(t, W - 6, ym);
       });
     }
@@ -537,8 +574,8 @@ function render(){
       const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
       const tw = ctx.measureText(t).width, x = cw - 60;
       ctx.globalAlpha = Math.max(.25, a);
-      ctx.fillStyle = 'rgba(13,17,23,.85)'; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
-      ctx.fillStyle = g.kind === '취소' ? '#a5adb8' : '#e3b341';
+      ctx.fillStyle = T.lbg; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
+      ctx.fillStyle = g.kind === '취소' ? T.ghost : T.ghostF;
       ctx.fillText(t, x - 2, ym);
       if (g.kind === '취소'){ ctx.fillRect(x - tw - 2, ym, tw, 1); }
       ctx.globalAlpha = 1;
@@ -550,30 +587,30 @@ function render(){
     if (!bkx.ready || (name === '선물' ? !ST.fut : !ST.spot)) continue;
     for (const e of [bkx.edgeLo, bkx.edgeHi]){
       if (e <= lo || e >= hi) continue;
-      const yy = y(e); ctx.strokeStyle = '#6e7681'; ctx.beginPath(); ctx.moveTo(cw, yy); ctx.lineTo(W, yy); ctx.stroke();
-      ctx.fillStyle = '#6e7681'; ctx.fillText(name + ' 호가 데이터 끝', cw + 4, yy + (e < P ? 8 : -8));
+      const yy = y(e); ctx.strokeStyle = T.mute; ctx.beginPath(); ctx.moveTo(cw, yy); ctx.lineTo(W, yy); ctx.stroke();
+      ctx.fillStyle = T.mute; ctx.fillText(name + ' 호가 데이터 끝', cw + 4, yy + (e < P ? 8 : -8));
     }
   }
   ctx.setLineDash([]);
 
   // 현재가
   const yp = y(P);
-  ctx.strokeStyle = '#e3b341'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = T.price; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]);
   if (Math.abs(ST.shift) > 0.5) L.push(() => {
     const t = `↕ ${ST.shift > 0 ? '+' : ''}${ST.shift.toFixed(0)}$ 이동 · 더블클릭으로 복귀`;
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right';
     const tw = ctx.measureText(t).width;
-    ctx.fillStyle = 'rgba(13,17,23,.9)'; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
-    ctx.fillStyle = '#58a6ff'; ctx.fillText(t, cw - 61, 13);
+    ctx.fillStyle = T.lbg; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
+    ctx.fillStyle = T.hint; ctx.fillText(t, cw - 61, 13);
   });
   for (const f of L) f();
   ctx.font = '700 12px sans-serif'; ctx.textAlign = 'right';
   const pt = P.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 }), ptw = ctx.measureText(pt).width;
   const px = Math.round(cw * 0.75 + ptw / 2);   // 차트 가로 3/4 지점, 살짝 투명
   ctx.globalAlpha = 0.72;
-  ctx.fillStyle = '#e3b341'; ctx.fillRect(px - ptw - 4, yp - 9, ptw + 8, 18);
+  ctx.fillStyle = T.price; ctx.fillRect(px - ptw - 4, yp - 9, ptw + 8, 18);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#0d1117'; ctx.fillText(pt, px, yp);
+  ctx.fillStyle = T.priceTxt; ctx.fillText(pt, px, yp);
 }
 
 function updateStatus(){
@@ -625,6 +662,20 @@ cv.addEventListener('pointermove', e => { if (drag) moveShift(drag.s + (e.client
 cv.addEventListener('pointerup', () => { drag = null; });
 cv.addEventListener('pointercancel', () => { drag = null; });
 cv.addEventListener('dblclick', () => moveShift(0));
+// 테마 / 히트맵 팔레트 (이 브라우저에 기억)
+const store = { get(k){ try { return localStorage.getItem(k); } catch (e){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch (e){} } };
+function applyLook(){
+  document.documentElement.dataset.theme = ST.theme;
+  $('theme').textContent = ST.theme === 'dark' ? '라이트 모드' : '다크 모드';
+  $('pal').value = ST.pal;
+  $('swL').style.background = heat('L', 1, 1); $('swS').style.background = heat('S', 1, 1);
+  dirty = true;
+}
+ST.theme = store.get('btcTheme') === 'light' ? 'light' : 'dark';
+ST.pal = PALS[store.get('btcPal')] ? store.get('btcPal') : 'classic';
+applyLook();
+$('theme').addEventListener('click', () => { ST.theme = ST.theme === 'dark' ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
+$('pal').addEventListener('change', e => { ST.pal = e.target.value; store.set('btcPal', ST.pal); applyLook(); });
 $('interval').addEventListener('change', e => { ST.interval = e.target.value; changeInterval(); });
 }
 </script>
