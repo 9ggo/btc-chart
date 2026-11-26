@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTC 선물 매물대 차트</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--bid:#26a69a;--ask:#ef5350}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+body{display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+header b{font-size:14px;margin-right:4px}
+label{display:inline-flex;align-items:center;gap:4px;color:var(--dim);white-space:nowrap}
+select,input[type=number]{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:13px}
+input[type=number]{width:64px}
+input[type=checkbox]{accent-color:#58a6ff}
+button{background:#21262d;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font:600 13px/1.4 inherit;cursor:pointer;font-variant-numeric:tabular-nums}
+button:active{background:#30363d}
+#wrap{position:relative;flex:1;min-height:300px}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:ns-resize}
+footer{padding:4px 10px;font-size:11px;color:var(--dim);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 14px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:3px}
+#status.err{color:#ff7b72}
+</style>
+</head>
+<body>
+<header>
+  <b>BTCUSDT 무기한 <small style="color:#8b949e;font-weight:400">v11</small></b>
+  <label>봉 <select id="interval"><option>1m</option><option>5m</option><option selected>15m</option><option>1h</option><option>4h</option></select></label>
+  <label>봉 개수 <select id="n"><option selected>60</option><option>90</option><option>120</option><option>150</option><option>180</option><option>210</option><option>240</option><option>300</option><option>400</option><option>500</option></select></label>
+  <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
+  <label>범위 <select id="range"><option value="0.5">±0.5%</option><option value="1" selected>±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
+  <label>최소 규모 $<input id="minQty" type="number" min="0" step="100000" value="0" style="width:96px"></label>
+</header>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<footer>
+  <span><i class="sw" style="background:var(--bid)"></i>선물 매수벽 <i class="sw" style="background:rgba(38,166,154,.4)"></i>현물 매수벽</span>
+  <span><i class="sw" style="background:var(--ask)"></i>선물 매도벽 <i class="sw" style="background:rgba(239,83,80,.4)"></i>현물 매도벽</span>
+  <span><i class="sw" style="background:#ff9f1c"></i>롱 청산 추정 <i class="sw" style="background:#b56cff"></i>숏 청산 추정</span>
+  <span>상위 3개 벽: 실선·테두리 = 2분 이상 유지 / 점선 = 신규</span>
+  <span>회색 취소선 = 가격이 안 닿았는데 사라진 벽(스푸핑 의심) · 노랑 = 체결된 벽</span>
+  <span>≥ = 접속 전부터 있던 벽</span>
+  <span>휠·드래그 = 위아래 이동, 더블클릭 = 복귀</span>
+  <span>흐린 회색 띠 = 가격이 닿아 소진된 청산 매물 (세로 눈금 = 닿은 시점)</span>
+  <span id="status">연결 중…</span>
+</footer>
+
+<script>
+{
+const SYM = 'BTCUSDT', sym = 'btcusdt';
+const FAPI = 'https://fapi.binance.com';
+const SAPI = 'https://api.binance.com';
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+
+const ST = { interval:'15m', n:60, bucket:0, range:1, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0 };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+let viewSpan = 1, viewPh = 1;
+let candles = [], lastPrice = 0, dirty = true, lastErr = '';
+const forces = [];                       // 실제 체결된 청산 (forceOrder)
+const liqE = new Map(); // 추정 청산 매물: {side, p, t(생긴 시각), usd, end(가격이 닿아 소진된 시각, 0=미소진)}
+let lastOI = null, liqReady = false;
+
+/* ---------------- 오더북: 스냅샷 + 증분 동기화, 수량 0 = 체결/취소 → 삭제 ---------------- */
+class Book {
+  constructor(kind, snapUrl){
+    this.kind = kind; this.snapUrl = snapUrl;
+    this.bids = new Map(); this.asks = new Map();
+    this.state = 'idle'; this.buf = []; this.lastId = 0; this.prevU = null;
+    this.syncing = false; this.edgeLo = 0; this.edgeHi = 0;
+  }
+  get ready(){ return this.state === 'live'; }
+  handle(e){
+    if (this.state === 'buffer'){ this.buf.push(e); if (this.buf.length > 3000) this.buf.shift(); return; }
+    if (this.state === 'live') this.step(e);
+  }
+  step(e){
+    if (this.kind === 'fut'){
+      if (this.prevU === null){
+        if (e.u < this.lastId) return;
+        if (e.U > this.lastId) return this.resync();
+      } else if (e.pu !== this.prevU) return this.resync();
+    } else {
+      if (this.prevU === null){
+        if (e.u <= this.lastId) return;
+        if (e.U > this.lastId + 1) return this.resync();
+      } else if (e.U !== this.prevU + 1) return this.resync();
+    }
+    this.apply(this.bids, e.b, e.E);
+    this.apply(this.asks, e.a, e.E);
+    this.prevU = e.u; dirty = true;
+  }
+  apply(side, arr, ts){
+    for (const [p, q] of arr){
+      const pr = +p, qt = +q;
+      if (qt === 0) side.delete(pr); else side.set(pr, [qt, ts]);
+    }
+  }
+  // 오래된 레벨이 반대편과 교차하면(이미 체결된 잔상) 더 오래된 쪽 제거
+  uncross(){
+    for (let g = 0; g < 200; g++){
+      let bb = -Infinity, ba = Infinity;
+      for (const p of this.bids.keys()) if (p > bb) bb = p;
+      for (const p of this.asks.keys()) if (p < ba) ba = p;
+      if (bb < ba) return;
+      if (this.bids.get(bb)[1] <= this.asks.get(ba)[1]) this.bids.delete(bb); else this.asks.delete(ba);
+    }
+  }
+  async resync(){
+    if (this.syncing) return;
+    this.syncing = true; this.state = 'buffer'; this.buf = [];
+    try {
+      const r = await fetch(this.snapUrl);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const s = await r.json();
+      this.bids.clear(); this.asks.clear();
+      const t0 = Date.now() - 1;
+      for (const [p, q] of s.bids) this.bids.set(+p, [+q, t0]);
+      for (const [p, q] of s.asks) this.asks.set(+p, [+q, t0]);
+      this.edgeLo = s.bids.length ? +s.bids[s.bids.length - 1][0] : 0;
+      this.edgeHi = s.asks.length ? +s.asks[s.asks.length - 1][0] : 0;
+      this.lastId = s.lastUpdateId; this.prevU = null;
+      this.state = 'live'; this.syncing = false;
+      const b = this.buf; this.buf = [];
+      for (const e of b){ this.step(e); if (this.state !== 'live') break; }
+      dirty = true;
+    } catch (err){
+      setErr((this.kind === 'fut' ? '선물' : '현물') + ' 호가 스냅샷 실패: ' + err.message);
+      this.syncing = false;
+      setTimeout(() => this.resync(), 4000);
+    }
+  }
+}
+
+const futBook  = new Book('fut',  `${FAPI}/fapi/v1/depth?symbol=${SYM}&limit=1000`);
+const spotBook = new Book('spot', `${SAPI}/api/v3/depth?symbol=${SYM}&limit=5000`);
+
+function openWS(url, onMsg, onOpen, onClose){
+  let ws, closed = false;
+  const conn = () => {
+    ws = new WebSocket(url);
+    ws.onopen = () => onOpen && onOpen();
+    ws.onmessage = ev => { try { onMsg(JSON.parse(ev.data)); } catch (e){ console.error(e); } };
+    ws.onclose = () => { if (closed) return; onClose && onClose(); setTimeout(conn, 2000); };
+    ws.onerror = () => ws.close();
+  };
+  conn();
+  return { close(){ closed = true; ws && ws.close(); } };
+}
+
+function setErr(m){ lastErr = m; dirty = true; }
+
+/* ---------------- 캔들 ---------------- */
+async function loadKlines(){
+  const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${ST.interval}&limit=500`);
+  if (!r.ok) throw new Error('캔들 HTTP ' + r.status);
+  const a = await r.json();
+  candles = a.map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9] }));
+  if (candles.length) lastPrice = candles[candles.length - 1].c;
+  dirty = true;
+}
+let lastKlineMsg = 0, marketOpen = false, forceAll = 0;
+async function priceFallback(){
+  if (Date.now() - lastKlineMsg < 8000) return;
+  try {
+    const r = await fetch(`${FAPI}/fapi/v1/ticker/price?symbol=${SYM}`); if (!r.ok) return;
+    const p = +(await r.json()).price; if (!p) return;
+    lastPrice = p;
+    const c = candles[candles.length - 1];
+    if (c){ c.c = p; if (p > c.h) c.h = p; if (p < c.l) c.l = p; }
+    sweepLiq(p, p); dirty = true;
+  } catch (e){}
+}
+function onKline(k){
+  lastKlineMsg = Date.now();
+  const c = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, tb:+k.V };
+  const last = candles[candles.length - 1];
+  if (last && last.t === c.t) candles[candles.length - 1] = c;
+  else if (!last || c.t > last.t){ candles.push(c); if (candles.length > 1500) candles.shift(); }
+  lastPrice = c.c;
+  sweepLiq(c.c, c.c);
+  dirty = true;
+}
+function onForce(o){
+  forceAll++;
+  if (o.s !== SYM) { dirty = true; return; }
+  const p = +o.ap || +o.p, q = +o.z || +o.q;
+  forces.push({ t:o.T, p, usd:p * q, long:o.S === 'SELL' });
+  if (forces.length > 400) forces.shift();
+  dirty = true;
+}
+
+/* ---------------- 청산 매물대 추정 모델 ----------------
+   미결제약정(OI)이 늘어난 구간 = 새 포지션 진입.
+   테이커 매수 비율로 롱/숏을 나누고, 레버리지 분포로 청산가를 계산.
+   가격이 청산가를 지나가면 그 매물대는 소진된 것으로 보고 삭제(=미체결만 남김). */
+const LEVS = [[5,.10],[10,.25],[25,.30],[50,.20],[100,.15]], MMR = 0.004;
+const share = (tb, v) => v > 0 ? Math.min(.7, Math.max(.3, tb / v)) : .5;
+// $10 가격 × 5분 시간 칸 단위로 묶어서 저장
+function addTo(side, p, u, t){
+  const pk = Math.round(p / 10) * 10, tk = Math.floor(t / 300000), key = side + pk + '|' + tk;
+  const e = liqE.get(key);
+  if (e && !e.end) e.usd += u; else liqE.set(key, { side, p:pk, t:tk * 300000, usd:u, end:0 });
+}
+function addPos(p, dBtc, ls, t = Date.now()){
+  const u = dBtc * p;
+  for (const [L, w] of LEVS){
+    addTo('L', p * (1 - 1 / L + MMR), u * ls * w, t);
+    addTo('S', p * (1 + 1 / L - MMR), u * (1 - ls) * w, t);
+  }
+}
+function scaleLiq(f){
+  for (const [k, e] of liqE){ if (e.end) continue; e.usd *= f; if (e.usd < 1000) liqE.delete(k); }
+}
+// 가격이 닿으면 지우지 않고 소진 시각을 기록 → 그 시점까지만 옅게 그림
+function sweepLiq(lo, hi, t = Date.now()){
+  for (const e of liqE.values()){
+    if (e.end) continue;
+    if ((e.side === 'L' && e.p >= lo) || (e.side === 'S' && e.p <= hi)) e.end = t;
+  }
+}
+function pruneLiq(){
+  const cut = (candles[0] ? candles[0].t : Date.now()) - 86400000;
+  for (const [k, e] of liqE) if (e.end && e.end < cut) liqE.delete(k);
+}
+async function initLiq(){
+  try {
+    const [oiR, kR] = await Promise.all([
+      fetch(`${FAPI}/futures/data/openInterestHist?symbol=${SYM}&period=5m&limit=500`),
+      fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=5m&limit=500`)
+    ]);
+    if (!oiR.ok || !kR.ok) throw new Error('HTTP ' + oiR.status + '/' + kR.status);
+    const oi = await oiR.json(), ks = await kR.json();
+    const km = new Map(ks.map(k => [k[0], k]));
+    liqE.clear();
+    for (let i = 1; i < oi.length; i++){
+      const ts = oi[i].timestamp, k = km.get(ts - 300000) || km.get(ts);
+      if (!k) continue;
+      const h = +k[2], l = +k[3], c = +k[4], v = +k[5], tb = +k[9];
+      sweepLiq(l, h, +k[0]);
+      const a = +oi[i - 1].sumOpenInterest, b = +oi[i].sumOpenInterest;
+      if (b > a) addPos((h + l + c) / 3, b - a, share(tb, v), +k[0]);
+      else if (a > 0) scaleLiq(b / a);
+    }
+    if (oi.length) lastOI = +oi[oi.length - 1].sumOpenInterest;
+    if (lastPrice) sweepLiq(lastPrice, lastPrice);
+    liqReady = true; dirty = true;
+  } catch (err){ setErr('청산 모델 데이터 실패: ' + err.message); }
+}
+async function pollOI(){
+  try {
+    const r = await fetch(`${FAPI}/fapi/v1/openInterest?symbol=${SYM}`);
+    if (!r.ok) return;
+    const oi = +(await r.json()).openInterest;
+    if (lastOI != null && lastPrice){
+      const c = candles[candles.length - 1] || {};
+      if (oi > lastOI) addPos(lastPrice, oi - lastOI, share(c.tb, c.v));
+      else if (lastOI > 0) scaleLiq(oi / lastOI);
+    }
+    lastOI = oi; dirty = true;
+  } catch (e){}
+}
+
+/* ---------------- 그리기 ---------------- */
+const nice = x => { const e = 10 ** Math.floor(Math.log10(x)); for (const m of [1,2,2.5,5,10]) if (m * e >= x) return m * e; return 10 * e; };
+const fq = q => q >= 100 ? q.toFixed(0) : q >= 10 ? q.toFixed(1) : q.toFixed(2);
+const fu = u => u >= 1e9 ? '$' + (u / 1e9).toFixed(2) + 'B' : u >= 1e6 ? '$' + (u / 1e6).toFixed(1) + 'M' : '$' + (u / 1e3).toFixed(0) + 'K';
+/* ---------------- 매물벽 유지 시간 추적 ----------------
+   구간별로 '최고치의 50% 이상'을 연속 유지한 시간을 잰다.
+   절반 아래로 빠지거나 사라지면, 큰 벽이었던 경우 가격 도달 여부로 체결/취소를 판정. */
+const PERSIST = 120000, GHOST_MS = 60000, DEPTH_MS = 500;
+let depthCache = null;
+const walls = new Map(), ghosts = [];
+let trackStart = 0;
+const fdur = ms => { const s = Math.floor(ms / 1000); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's' : Math.floor(s / 3600) + 'h' + String(Math.floor(s / 60) % 60).padStart(2, '0') + 'm'; };
+const fage = o => (o.fromStart ? '≥' : '') + fdur(o.age || 0);
+function addGhost(w, B, P, now){
+  const pLo = w.k * B;
+  const filled = w.side === 'b' ? P <= pLo + B : P >= pLo;
+  ghosts.push({ pLo, B, peak:w.peak, side:w.side, kind:filled ? '체결' : '취소', t:now, age:now - w.since });
+  if (ghosts.length > 40) ghosts.shift();
+}
+function trackWalls(allRows, B, lo, hi, P, now, mxAll){
+  if (!trackStart) trackStart = now;
+  const tag = B + '|' + (ST.fut ? 1 : 0) + (ST.spot ? 1 : 0) + '|';
+  const seen = new Set();
+  for (const o of allRows){
+    const key = tag + o.side + o.k; seen.add(key);
+    let w = walls.get(key);
+    if (!w || o.tot < 0.5 * w.peak){
+      if (w && w.big) addGhost(w, B, P, now);
+      w = { since:now, peak:o.tot, k:o.k, side:o.side, big:false };
+      walls.set(key, w);
+    } else if (o.tot > w.peak) w.peak = o.tot;
+    if (o.tot >= 0.4 * mxAll) w.big = true;
+    o.age = now - w.since;
+    o.fromStart = w.since - trackStart < 2000;
+  }
+  for (const [key, w] of walls){
+    if (!key.startsWith(tag)){ walls.delete(key); continue; }
+    if (seen.has(key)) continue;
+    const pLo = w.k * B;
+    if (pLo + B < lo || pLo > hi) continue;   // 화면 밖은 판단 보류
+    if (w.big) addGhost(w, B, P, now);
+    walls.delete(key);
+  }
+}
+function overlaps(list, a, b){ for (const [x, y] of list) if (a < y && b > x) return true; return false; }
+
+function render(){
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight, now0 = Date.now();
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+  updateStatus();
+  if (!candles.length || !lastPrice){
+    ctx.fillStyle = '#8b949e'; ctx.font = '14px sans-serif'; ctx.fillText('데이터 불러오는 중…', 16, 30); return;
+  }
+  const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
+  const cw = W - panelW, top = 8, bot = H - 8, ph = bot - top;
+  const P = lastPrice, vis = candles.slice(-ST.n);
+  let lo = P * (1 - ST.range / 100), hi = P * (1 + ST.range / 100);
+  for (const c of vis){ if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; }
+  const pd = (hi - lo) * 0.02; lo -= pd; hi += pd;
+  lo += ST.shift; hi += ST.shift; viewSpan = hi - lo; viewPh = ph;   // 위아래 스크롤
+  const y = p => top + (hi - p) / (hi - lo) * ph;
+  const autoB = nice((hi - lo) / 110), B = ST.bucket || autoB;
+  { const a = $('autoOpt'), txt = `자동 ($${autoB})`; if (a.textContent !== txt) a.textContent = txt; }
+  const dec = B < 1 ? 2 : B % 1 ? 1 : 0;
+  const fp = x => x.toLocaleString('en-US', { minimumFractionDigits:dec, maximumFractionDigits:dec });
+
+  const L = [];   // 숫자 라벨은 모아뒀다가 맨 마지막에 그림
+  // 그리드
+  const gs = nice((hi - lo) / 8);
+  ctx.font = '10px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let p = Math.ceil(lo / gs) * gs; p <= hi; p += gs){
+    const yy = Math.round(y(p)) + .5;
+    ctx.strokeStyle = '#1c2128'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke();
+    ctx.fillStyle = '#6e7681'; ctx.fillText(fp(p), cw - 4, yy - 7);
+  }
+  ctx.strokeStyle = '#30363d'; ctx.beginPath(); ctx.moveTo(cw + .5, 0); ctx.lineTo(cw + .5, H); ctx.stroke();
+
+  const plotW = cw - 56, slot = plotW / ST.n, bw = Math.max(1, slot * 0.7), off = ST.n - vis.length;
+  const xOf = i => (off + i) * slot + slot / 2;
+  const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
+  const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
+
+  // 청산 추정 띠: 생긴 시점부터 오른쪽으로 뻗고, 가격이 닿은 부분은 그 시점에서 끊기고 옅어짐
+  if (ST.liq && liqReady){
+    const act = new Map(), done = [];
+    for (const e of liqE.values()){
+      if (e.p < lo || e.p > hi) continue;
+      if (e.end){ if (e.end > t0) done.push(e); continue; }
+      const key = e.side + Math.floor(e.p / B);
+      let o = act.get(key);
+      if (!o){ o = { k:Math.floor(e.p / B), side:e.side, u:0, es:[] }; act.set(key, o); }
+      o.u += e.usd; o.es.push(e);
+    }
+    const arr = [...act.values()];
+    const mx = Math.max(0, ...arr.map(o => o.u));
+    const col = (side, r, am) => {
+      r = Math.min(1, r) ** 0.6;
+      const hue = side === 'L' ? 18 + 37 * r : 265 + 45 * r;   // 롱: 주황→노랑, 숏: 보라→분홍
+      return `hsla(${hue.toFixed(0)},100%,${(30 + 38 * r).toFixed(0)}%,${((0.12 + 0.68 * r) * am).toFixed(3)})`;
+    };
+    if (mx > 0){
+      // 소진된 매물: 같은 가격 구간·같은 소진 시각끼리 묶어 한 번만 그림 (겹쳐서 진해지는 것 방지)
+      const dg = new Map();
+      for (const e of done){
+        const k = Math.floor(e.p / B), key = e.side + k + '|' + Math.floor(e.end / 60000);
+        const g = dg.get(key);
+        if (g){ g.t = Math.min(g.t, e.t); g.u += e.usd; } else dg.set(key, { side:e.side, k, t:e.t, end:e.end, u:e.usd });
+      }
+      for (const g of dg.values()){
+        const x0 = xT(g.t), x1 = xT(g.end); if (x1 - x0 < 1) continue;
+        const y0 = y((g.k + 1) * B), h = Math.max(1, y(g.k * B) - y0), r = Math.min(1, g.u / mx);
+        // 회색빛으로 흐리게: 살아있는 매물과 확실히 구분
+        ctx.fillStyle = g.side === 'L' ? `rgba(150,120,80,${(0.06 + 0.16 * r).toFixed(3)})` : `rgba(130,100,150,${(0.06 + 0.16 * r).toFixed(3)})`;
+        ctx.fillRect(x0, y0, x1 - x0, h);
+        ctx.fillStyle = g.side === 'L' ? 'rgba(255,190,90,.45)' : 'rgba(210,160,255,.45)'; ctx.fillRect(x1 - 1, y0, 1.5, h);   // 닿은 지점
+      }
+      // 살아있는 매물: 시간순으로 누적되며 진해짐
+      for (const o of arr){
+        o.es.sort((a, b) => a.t - b.t);
+        const y0 = y((o.k + 1) * B), h = Math.max(1, y(o.k * B) - y0);
+        let cum = 0;
+        o.es.forEach((e, i) => {
+          cum += e.usd;
+          const x0 = xT(e.t), x1 = i + 1 < o.es.length ? xT(o.es[i + 1].t) : cw;
+          if (x1 - x0 < .5) return;
+          ctx.fillStyle = col(o.side, cum / mx, 1); ctx.fillRect(x0, y0, x1 - x0, h);
+        });
+        o.x0 = xT(o.es[0].t);
+        const r = (o.u / mx) ** 0.6;
+        if (r > 0.75){ ctx.fillStyle = col(o.side, 1, 1.2); ctx.fillRect(o.x0, y0, cw - o.x0, 1); ctx.fillRect(o.x0, y0 + h - 1, cw - o.x0, 1); }
+      }
+      arr.sort((a, b) => b.u - a.u);
+      const placed = ST.force ? [[0, 30]] : []; let n = 0;
+      for (const o of arr){
+        if (n >= 6) break;
+        const r = o.u / mx; if (r < 0.15) break;
+        const fs = Math.round(9 + 7 * r), ym = y((o.k + .5) * B);
+        if (ym < top + fs || ym > bot - fs || overlaps(placed, ym - fs / 2 - 3, ym + fs / 2 + 3)) continue;
+        placed.push([ym - fs / 2 - 3, ym + fs / 2 + 3]); n++;
+        const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(o.k * B)}-${fp((o.k + 1) * B)}  ${fu(o.u)}`;
+        const lx = Math.min(o.x0 + 2, cw - 200);
+        L.push(() => {
+          ctx.textAlign = 'left'; ctx.font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
+          const tw = ctx.measureText(t).width, x = Math.max(2, Math.min(lx, cw - tw - 70));
+          ctx.fillStyle = 'rgba(13,17,23,.85)'; ctx.fillRect(x, ym - fs / 2 - 2, tw + 8, fs + 4);
+          ctx.fillStyle = o.side === 'L' ? '#ffb454' : '#c99bff'; ctx.fillText(t, x + 4, ym);
+        });
+      }
+    }
+  }
+
+  // 캔들
+  vis.forEach((c, i) => {
+    const x = xOf(i), up = c.c >= c.o;
+    ctx.strokeStyle = ctx.fillStyle = up ? '#26a69a' : '#ef5350';
+    ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, y(c.h)); ctx.lineTo(Math.round(x) + .5, y(c.l)); ctx.stroke();
+    const yo = y(c.o), yc = y(c.c);
+    ctx.fillRect(x - bw / 2, Math.min(yo, yc), bw, Math.max(1, Math.abs(yo - yc)));
+  });
+
+  // 실제 청산 체결 마커
+  if (ST.force && vis.length){
+    const step = vis.length > 1 ? vis[1].t - vis[0].t : 60000;
+    ctx.textAlign = 'center'; ctx.font = '700 10px sans-serif';
+    for (const f of forces){
+      if (f.t < vis[0].t || f.p < lo || f.p > hi) continue;
+      const i = Math.min(vis.length - 1, Math.floor((f.t - vis[0].t) / step));
+      const x = xOf(i), yy = y(f.p), s = Math.min(14, Math.max(5, Math.sqrt(f.usd / 5e3)));
+      // 롱 청산 = 아래 삼각형(▼, 강제 매도), 숏 청산 = 위 삼각형(▲, 강제 매수)
+      ctx.beginPath();
+      if (f.long){ ctx.moveTo(x - s, yy - s); ctx.lineTo(x + s, yy - s); ctx.lineTo(x, yy + s * .4); }
+      else { ctx.moveTo(x - s, yy + s); ctx.lineTo(x + s, yy + s); ctx.lineTo(x, yy - s * .4); }
+      ctx.closePath();
+      ctx.fillStyle = f.long ? '#ffb000' : '#d17bff'; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+      if (f.usd >= 1e5){ ctx.fillStyle = '#fff'; ctx.fillText(fu(f.usd), x, f.long ? yy - s - 7 : yy + s + 8); }
+    }
+    // 접속 후 누적 요약 (켜고 끄면 바로 보이도록)
+    const hr = now0 - 3600000; let lu = 0, su = 0, n = 0;
+    for (const f of forces){ if (f.t < hr) continue; n++; if (f.long) lu += f.usd; else su += f.usd; }
+    const t = n ? `BTC 실제 청산 1시간 · 롱 ${fu(lu)} · 숏 ${fu(su)} · ${n}건`
+                : `BTC 청산 아직 없음 · 스트림 ${marketOpen ? '연결됨' : '끊김'} · 전체 시장 ${forceAll}건 수신`;
+    L.push(() => {
+      ctx.font = '700 12px sans-serif'; ctx.textAlign = 'left';
+      const tw = ctx.measureText(t).width;
+      ctx.fillStyle = 'rgba(13,17,23,.9)'; ctx.fillRect(4, 4, tw + 12, 20);
+      ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, tw + 11, 19);
+      ctx.fillStyle = '#ffd27a'; ctx.fillText(t, 10, 14);
+    });
+  }
+
+  // 호가 매물대 (미체결 주문만)
+  // 호가 패널은 DEPTH_MS(0.5초)마다만 다시 계산 — 캔들/현재가는 계속 실시간
+  const now = now0;
+  const flags = `${ST.fut}${ST.spot}${ST.minQty}`;
+  let rows, bars, mx;
+  {
+  const bk = new Map();
+  const agg = (book, fb, fa) => {
+    if (!book.ready) return;
+    book.uncross();
+    for (const [p, [q]] of book.bids){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0 }; o[fb] += q; bk.set(k, o); }
+    for (const [p, [q]] of book.asks){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0 }; o[fa] += q; bk.set(k, o); }
+  };
+  if (ST.fut) agg(futBook, 'fb', 'fa');
+  if (ST.spot) agg(spotBook, 'sb', 'sa');
+  const allRows = [...bk.values()].map(o => { o.bid = o.fb + o.sb; o.ask = o.fa + o.sa; o.tot = o.bid + o.ask; o.side = o.bid >= o.ask ? 'b' : 'a'; return o; })
+                                 .filter(o => o.tot > 0);
+  if (allRows.length) trackWalls(allRows, B, lo, hi, P, now, Math.max(...allRows.map(o => o.tot)));
+  if (depthCache && now - depthCache.t < DEPTH_MS && depthCache.B === B && depthCache.flags === flags){
+    ({ rows, bars, mx } = depthCache);   // 표시만 0.5초 유지, 벽 추적은 매 프레임
+  } else {
+    for (const o of allRows) o.usd = o.tot * (o.k + .5) * B;   // BTC → 달러 환산
+    rows = allRows.filter(o => o.usd >= ST.minQty);
+    // 보이는 가격대 중 규모 하위 절반은 숨김
+    bars = rows;   // 막대는 전부 표시
+    // 숫자 라벨만: 보이는 가격대 중 규모 하위 절반은 숨김
+    if (rows.length > 1){ const med = rows.map(o => o.tot).sort((a, b) => a - b)[Math.floor(rows.length / 2)]; rows = rows.filter(o => o.tot >= med); }
+    mx = Math.max(0, ...rows.map(o => o.tot));
+    depthCache = { t:now, B, flags, rows, bars, mx };
+  }
+  }
+  if (mx > 0){
+    const full = panelW - 6;
+    for (const o of bars){
+      const y0 = y((o.k + 1) * B), h = Math.max(1, y(o.k * B) - y0 - 1);
+      let x = cw + 1;
+      for (const [v, col] of [[o.fb, '#26a69a'], [o.sb, 'rgba(38,166,154,.4)'], [o.fa, '#ef5350'], [o.sa, 'rgba(239,83,80,.4)']]){
+        if (!v) continue; const w = full * v / mx; ctx.fillStyle = col; ctx.fillRect(x, y0, w, h); x += w;
+      }
+    }
+    // 쪽별 상위 3개 강조
+    const strong = new Set();
+    for (const s of ['b', 'a']) rows.filter(o => o.side === s).sort((a, b) => b.tot - a.tot).slice(0, 3).forEach(o => strong.add(o));
+    const placed = [];
+    ctx.textAlign = 'right';
+    for (const o of [...rows].sort((a, b) => b.tot - a.tot)){
+      const r = o.tot / mx, st = strong.has(o);
+      if (r < 0.08 && !st) break;
+      const fs = Math.round(9 + 9 * r ** 0.8), ym = y((o.k + .5) * B);
+      if (ym < top + fs / 2 || ym > bot - fs / 2 || overlaps(placed, ym - fs / 2 - 2, ym + fs / 2 + 2)) continue;
+      placed.push([ym - fs / 2 - 2, ym + fs / 2 + 2]);
+      const old = o.age >= PERSIST;
+      let t = `${fp(o.k * B)}-${fp((o.k + 1) * B)}  ${fu(o.usd)} · ${fage(o)}`;
+      ctx.font = `${st ? 700 : 500} ${fs}px sans-serif`;
+      const tw = ctx.measureText(t).width;
+      if (st){
+        ctx.strokeStyle = o.side === 'b' ? `rgba(93,242,198,${old ? .8 : .45})` : `rgba(255,138,128,${old ? .8 : .45})`;
+        ctx.lineWidth = 1 + 2 * r; ctx.setLineDash(old ? [] : [5, 4]);
+        ctx.beginPath(); ctx.moveTo(0, ym); ctx.lineTo(cw, ym); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      }
+      L.push(() => {
+        ctx.font = `${st ? 700 : 500} ${fs}px sans-serif`; ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(13,17,23,.85)'; ctx.fillRect(W - tw - 10, ym - fs / 2 - 2, tw + 8, fs + 4);
+        if (st && old){ ctx.strokeStyle = o.side === 'b' ? '#5df2c6' : '#ff8a80'; ctx.lineWidth = 1; ctx.strokeRect(W - tw - 10 + .5, ym - fs / 2 - 2 + .5, tw + 7, fs + 3); }
+        ctx.fillStyle = st ? (o.side === 'b' ? '#5df2c6' : '#ff8a80') : (old ? '#e6edf3' : '#9da7b3');
+        ctx.fillText(t, W - 6, ym);
+      });
+    }
+  }
+  // 최근 사라진 큰 벽: 취소(가격이 안 닿았는데 사라짐 = 스푸핑 의심) / 체결(가격이 닿아서 소화됨)
+  L.push(() => {
+    const placedG = [];
+    ctx.textAlign = 'right'; ctx.font = '500 11px sans-serif';
+    for (let i = ghosts.length - 1; i >= 0; i--){
+      const g = ghosts[i], a = 1 - (now - g.t) / GHOST_MS;
+      if (a <= 0 || g.B !== B) continue;
+      const ym = y(g.pLo + g.B / 2);
+      if (ym < top + 8 || ym > bot - 8 || overlaps(placedG, ym - 8, ym + 8)) continue;
+      placedG.push([ym - 8, ym + 8]);
+      const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
+      const tw = ctx.measureText(t).width, x = cw - 60;
+      ctx.globalAlpha = Math.max(.25, a);
+      ctx.fillStyle = 'rgba(13,17,23,.85)'; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
+      ctx.fillStyle = g.kind === '취소' ? '#a5adb8' : '#e3b341';
+      ctx.fillText(t, x - 2, ym);
+      if (g.kind === '취소'){ ctx.fillRect(x - tw - 2, ym, tw, 1); }
+      ctx.globalAlpha = 1;
+    }
+  });
+  // 호가 스냅샷 범위 끝 (이 바깥은 데이터가 불완전)
+  ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.setLineDash([2, 3]);
+  for (const [bkx, name] of [[futBook, '선물'], [spotBook, '현물']]){
+    if (!bkx.ready || (name === '선물' ? !ST.fut : !ST.spot)) continue;
+    for (const e of [bkx.edgeLo, bkx.edgeHi]){
+      if (e <= lo || e >= hi) continue;
+      const yy = y(e); ctx.strokeStyle = '#6e7681'; ctx.beginPath(); ctx.moveTo(cw, yy); ctx.lineTo(W, yy); ctx.stroke();
+      ctx.fillStyle = '#6e7681'; ctx.fillText(name + ' 호가 데이터 끝', cw + 4, yy + (e < P ? 8 : -8));
+    }
+  }
+  ctx.setLineDash([]);
+
+  // 현재가
+  const yp = y(P);
+  ctx.strokeStyle = '#e3b341'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]);
+  if (Math.abs(ST.shift) > 0.5) L.push(() => {
+    const t = `↕ ${ST.shift > 0 ? '+' : ''}${ST.shift.toFixed(0)}$ 이동 · 더블클릭으로 복귀`;
+    ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right';
+    const tw = ctx.measureText(t).width;
+    ctx.fillStyle = 'rgba(13,17,23,.9)'; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
+    ctx.fillStyle = '#58a6ff'; ctx.fillText(t, cw - 61, 13);
+  });
+  for (const f of L) f();
+  ctx.font = '700 12px sans-serif'; ctx.textAlign = 'right';
+  const pt = P.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 }), ptw = ctx.measureText(pt).width;
+  const px = Math.round(cw * 0.75 + ptw / 2);   // 차트 가로 3/4 지점, 살짝 투명
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = '#e3b341'; ctx.fillRect(px - ptw - 4, yp - 9, ptw + 8, 18);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#0d1117'; ctx.fillText(pt, px, yp);
+}
+
+function updateStatus(){
+  const s = [];
+  s.push('선물호가 ' + (futBook.ready ? '✓ ' + futBook.bids.size + '/' + futBook.asks.size : '동기화 중'));
+  s.push('현물호가 ' + (spotBook.ready ? '✓ ' + spotBook.bids.size + '/' + spotBook.asks.size : '동기화 중'));
+  s.push('청산모델 ' + (liqReady ? '✓' : '…'));
+  const ka = lastKlineMsg ? Math.round((Date.now() - lastKlineMsg) / 1000) : -1;
+  s.push(ka >= 0 && ka < 10 ? `캔들 실시간 ✓` : `캔들 웹소켓 ${marketOpen ? '연결됨·수신없음' : '끊김'} (REST 대체 중)`);
+  s.push(`청산 스트림 ${marketOpen ? '✓' : '✗'} 전체 ${forceAll}건`);
+  s.push(new Date().toLocaleTimeString('ko-KR'));
+  const el = $('status');
+  el.textContent = lastErr ? '⚠ ' + lastErr + ' · ' + s.join(' · ') : s.join(' · ');
+  el.className = lastErr ? 'err' : '';
+}
+
+/* ---------------- 연결 ---------------- */
+let klineWS = null;
+function startKlineWS(){
+  if (klineWS) klineWS.close();
+  marketOpen = false;
+  klineWS = openWS(`wss://fstream.binance.com/market/stream?streams=${sym}@kline_${ST.interval}/!forceOrder@arr`, m => {
+    const d = m.data; if (!d) return;
+    if (d.e === 'kline') onKline(d.k); else if (d.e === 'forceOrder') onForce(d.o);
+  }, () => { marketOpen = true; dirty = true; }, () => { marketOpen = false; dirty = true; });
+}
+async function changeInterval(){
+  try { await loadKlines(); lastErr = ''; } catch (e){ setErr(e.message); }
+  startKlineWS();
+}
+
+openWS(`wss://fstream.binance.com/public/stream?streams=${sym}@depth@100ms`, m => { if (m.data) futBook.handle(m.data); }, () => futBook.resync());
+openWS(`wss://stream.binance.com:9443/ws/${sym}@depth@100ms`, d => spotBook.handle(d), () => spotBook.resync());
+changeInterval().then(initLiq);
+setInterval(pollOI, 15000);
+setInterval(pruneLiq, 60000);
+setInterval(priceFallback, 3000);
+setInterval(() => { if (dirty){ dirty = false; render(); } }, 250);
+setInterval(() => { dirty = true; }, 1000);
+new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
+
+for (const id of ['n', 'bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = +e.target.value || 0; if (id === 'n') ST.n = ST.n || 60; dirty = true; });
+// 차트 위아래 스크롤: 휠 / 드래그, 더블클릭으로 현재가 복귀
+const moveShift = v => { ST.shift = v; depthCache = null; dirty = false; render(); };
+cv.addEventListener('wheel', e => { e.preventDefault(); moveShift(ST.shift - e.deltaY * viewSpan / viewPh * 0.6); }, { passive:false });
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { y:e.clientY, s:ST.shift }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (drag) moveShift(drag.s + (e.clientY - drag.y) * viewSpan / viewPh); });
+cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointercancel', () => { drag = null; });
+cv.addEventListener('dblclick', () => moveShift(0));
+$('interval').addEventListener('change', e => { ST.interval = e.target.value; changeInterval(); });
+}
+</script>
+</body>
+</html>
