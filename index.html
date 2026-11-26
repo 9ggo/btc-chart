@@ -6,7 +6,7 @@
 <title>BTC 선물 매물대 차트</title>
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--btn:#21262d;--btn2:#30363d;--bid:#26a69a;--ask:#ef5350}
-:root[data-theme=light]{--bg:#eceff2;--panel:#e2e6ea;--line:#c6cdd4;--ink:#1f2328;--dim:#4b545d;--btn:#f5f6f8;--btn2:#dde2e7}
+:root[data-theme=light]{--bg:#c9cfd5;--panel:#bdc4cb;--line:#a3abb4;--ink:#161a1f;--dim:#2f363d;--btn:#d8dde2;--btn2:#c4cad0}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 body{display:flex;flex-direction:column}
@@ -72,18 +72,20 @@ const THEMES = {
   dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#a3adb8', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
            bidS:'#5df2c6', askS:'#ff8a80', bidLn:'93,242,198', askLn:'255,138,128', mark:'#ffffff', sumTxt:'#ffd27a', sumLn:'#ffb000',
            ghost:'#a5adb8', ghostF:'#e3b341', hint:'#58a6ff', price:'#e3b341', priceTxt:'#0d1117', spotB:'rgba(38,166,154,.4)', spotA:'rgba(239,83,80,.4)' },
-  light: { bg:'#eceff2', grid:'#dce1e6', mute:'#4f5862', line:'#c6cdd4', lbg:'rgba(236,239,242,.92)', ink:'#57606a', inkS:'#1f2328',
+  light: { bg:'#c9cfd5', grid:'#b9c0c7', mute:'#2f363d', line:'#a3abb4', lbg:'rgba(214,219,224,.92)', ink:'#3a4148', inkS:'#111418',
            bidS:'#0a8f6c', askS:'#cf222e', bidLn:'10,143,108', askLn:'207,34,46', mark:'#1f2328', sumTxt:'#7d5600', sumLn:'#bf8700',
-           ghost:'#6e7781', ghostF:'#9a6700', hint:'#0969da', price:'#d4a72c', priceTxt:'#1f2328', spotB:'rgba(38,166,154,.35)', spotA:'rgba(239,83,80,.35)' }
+           ghost:'#6e7781', ghostF:'#9a6700', hint:'#0969da', price:'#d4a72c', priceTxt:'#1f2328', spotB:'rgba(38,166,154,.55)', spotA:'rgba(239,83,80,.55)' }
 };
 // 히트맵 팔레트: [위치, [R,G,B]] 구간. L = 롱 청산(아래), S = 숏 청산(위). 한 가지만 있으면 양쪽 공통.
 const PALS = {
-  bluered: { L:[[0,[10,45,120]],[1,[90,205,255]]], S:[[0,[120,10,25]],[1,[255,125,115]]] }   // 롱 청산 = 파랑, 숏 청산 = 빨강
+  bluered: { L:[[0,[10,45,120]],[1,[90,205,255]]], S:[[0,[120,10,25]],[1,[255,125,115]]],
+             LL:[[0,[120,160,215]],[1,[0,50,185]]], SL:[[0,[215,130,130]],[1,[185,0,15]]] }   // LL/SL = 라이트 모드용(진할수록 짙은 색)   // 롱 청산 = 파랑, 숏 청산 = 빨강
 };
 let T = THEMES.dark;
 function palRGB(side, r){
   const P = PALS.bluered;
-  const st = (ST.theme === 'light' && P.AL) || P.A || (side === 'L' ? P.L : P.S);
+  const lt = ST.theme === 'light';
+  const st = (lt && P.AL) || P.A || (side === 'L' ? (lt && P.LL) || P.L : (lt && P.SL) || P.S);
   for (let i = 1; i < st.length; i++){
     if (r <= st[i][0]){
       const [a, ca] = st[i - 1], [b, cb] = st[i], f = (r - a) / (b - a || 1);
@@ -95,10 +97,11 @@ function palRGB(side, r){
 function heat(side, r, am){
   r = Math.min(1, Math.max(0, r)) ** 0.6;
   const [R, G, B] = palRGB(side, r);
-  return `rgba(${R},${G},${B},${((0.12 + 0.68 * r) * am).toFixed(3)})`;
+  const a = ST.theme === 'light' ? 0.22 + 0.73 * r : 0.12 + 0.68 * r;
+  return `rgba(${R},${G},${B},${Math.min(1, a * am).toFixed(3)})`;
 }
 function liqText(side){   // 라벨 글자색: 팔레트의 밝은 쪽, 라이트 모드에선 어둡게
-  const c = palRGB(side, .85), k = ST.theme === 'light' ? .55 : 1;
+  const c = palRGB(side, ST.theme === 'light' ? 1 : .85), k = ST.theme === 'light' ? .8 : 1;
   return `rgb(${c.map(v => Math.round(v * k)).join(',')})`;
 }
 let candles = [], lastPrice = 0, dirty = true, lastErr = '';
@@ -418,7 +421,8 @@ function render(){
         const x0 = xT(g.t), x1 = xT(g.end); if (x1 - x0 < 1) continue;
         const y0 = y((g.k + 1) * B), h = Math.max(1, y(g.k * B) - y0), r = Math.min(1, g.u / mx);
         // 회색빛으로 흐리게: 살아있는 매물과 확실히 구분
-        ctx.fillStyle = g.side === 'L' ? `rgba(150,120,80,${(0.06 + 0.16 * r).toFixed(3)})` : `rgba(130,100,150,${(0.06 + 0.16 * r).toFixed(3)})`;
+        const lt = ST.theme === 'light', da = (lt ? 0.10 + 0.22 * r : 0.06 + 0.16 * r).toFixed(3);
+        ctx.fillStyle = g.side === 'L' ? `rgba(${lt ? '60,75,105' : '150,120,80'},${da})` : `rgba(${lt ? '105,60,60' : '130,100,150'},${da})`;
         ctx.fillRect(x0, y0, x1 - x0, h);
         ctx.fillStyle = g.side === 'L' ? 'rgba(255,190,90,.45)' : 'rgba(210,160,255,.45)'; ctx.fillRect(x1 - 1, y0, 1.5, h);   // 닿은 지점
       }
