@@ -53,7 +53,7 @@ footer.folded #status{margin-left:auto}
     <p>흐린 회색 띠는 가격이 이미 닿아 소진된 청산 물량이고, 띠 끝의 세로 눈금이 가격이 닿은 시점입니다. ▼·▲ 삼각형은 실제로 체결된 롱·숏 청산입니다.</p>
     <p>매수·매도 쪽마다 가장 큰 매물벽 3개는 점선으로 표시되고, 2분 이상 유지되면 실선과 테두리로 바뀝니다. 유지 시간 앞의 ≥ 표시는 차트를 열기 전부터 있던 벽이라는 뜻입니다.</p>
     <p>회색 취소선이 그어진 라벨은 가격이 닿기 전에 사라진 벽으로 스푸핑일 가능성이 있고, 노란 라벨은 가격이 닿아 체결된 벽입니다.</p>
-    <p>차트는 마우스 휠이나 드래그로 위아래로 움직일 수 있고, 더블클릭하면 현재가 중심으로 돌아옵니다.</p>
+    <p>차트는 마우스 휠이나 드래그로 위아래로 움직일 수 있고, 더블클릭(터치 화면은 두 번 탭)하면 현재가 중심으로 돌아옵니다.</p>
   </div>
   <span id="status">연결 중…</span>
 </footer>
@@ -606,7 +606,7 @@ function render(){
   const yp = y(P);
   ctx.strokeStyle = T.price; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]);
   if (Math.abs(ST.shift) > 0.5) L.push(() => {
-    const t = `↕ ${ST.shift > 0 ? '+' : ''}${ST.shift.toFixed(0)}$ 이동 · 더블클릭으로 복귀`;
+    const t = `↕ ${ST.shift > 0 ? '+' : ''}${ST.shift.toFixed(0)}$ 이동 · 두 번 탭/더블클릭으로 복귀`;
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right';
     const tw = ctx.measureText(t).width;
     ctx.fillStyle = T.lbg; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
@@ -658,9 +658,22 @@ for (const id of ['n', 'bucket', 'range', 'minQty']) $(id).addEventListener('inp
 const moveShift = v => { ST.shift = v; depthCache = null; dirty = false; render(); };
 cv.addEventListener('wheel', e => { e.preventDefault(); moveShift(ST.shift - e.deltaY * viewSpan / viewPh * 0.6); }, { passive:false });
 let drag = null;
-cv.addEventListener('pointerdown', e => { drag = { y:e.clientY, s:ST.shift }; cv.setPointerCapture(e.pointerId); });
-cv.addEventListener('pointermove', e => { if (drag) moveShift(drag.s + (e.clientY - drag.y) * viewSpan / viewPh); });
-cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointerdown', e => { drag = { y:e.clientY, x:e.clientX, s:ST.shift, moved:false }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (Math.abs(e.clientY - drag.y) > 6) drag.moved = true;
+  if (drag.moved) moveShift(drag.s + (e.clientY - drag.y) * viewSpan / viewPh);
+});
+// 터치 기기(아이패드 등)는 dblclick이 안 오므로 직접 두 번 탭을 감지
+let lastTap = { t:0, x:0, y:0 };
+cv.addEventListener('pointerup', e => {
+  if (drag && !drag.moved){
+    const now = Date.now();
+    if (now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30){ moveShift(0); lastTap.t = 0; }
+    else lastTap = { t:now, x:e.clientX, y:e.clientY };
+  }
+  drag = null;
+});
 cv.addEventListener('pointercancel', () => { drag = null; });
 cv.addEventListener('dblclick', () => moveShift(0));
 // 테마 / 히트맵 팔레트 (이 브라우저에 기억)
