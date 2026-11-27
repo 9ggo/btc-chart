@@ -867,7 +867,7 @@ async function changeInterval(iv){
     const data = await fetchKlines(iv);
     if (req !== ivReq) return;                  // 그사이 다른 봉을 골랐으면 버림
     ST.interval = iv; noMoreOlder = false; setN(ST.dur / IV_MIN[iv], true);
-    ST.xOff = 0; ST.view = null; ST.span = null; autoHalf = 0; autoBucket = 0;
+    ST.xOff = 0; ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0;
     candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
     lastErr = '';
     startKlineWS();
@@ -891,7 +891,7 @@ setInterval(() => { if (dirty){ dirty = false; render(); } }, 250);
 setInterval(() => { dirty = true; }, 1000);
 new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 
-for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; autoHalf = 0; autoBucket = 0; } dirty = true; });
+for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0; } dirty = true; });
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
 const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '4h':240 };
@@ -916,8 +916,10 @@ function redraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; depthC
 // 두 번 탭/더블클릭: 확대해 둔 세로 비율은 유지한 채 최신 캔들·현재가 가운데로.
 // 이미 그 상태에서 한 번 더 하면 자동 맞춤으로.
 function resetView(){
-  if (ST.view) ST.span = ST.view.hi - ST.view.lo;
+  // 세로 비율을 직접 바꾼 적이 있을 때만 그 비율을 유지 (드래그로 옮기기만 했다면 자동 맞춤으로)
+  if (ST.view) ST.span = ST.scaled ? ST.view.hi - ST.view.lo : null;
   else if (ST.xOff < 0.5) ST.span = null;
+  if (!ST.span) ST.scaled = false;
   ST.view = null; ST.xOff = 0; autoHalf = 0; autoBucket = 0; redraw();
 }
 const manual = () => { if (!ST.view){ ST.view = { lo:viewLo, hi:viewHi }; ST.span = null; } return ST.view; };
@@ -931,6 +933,7 @@ function zoomAt(ft, fp, cx, cy, sync){
     ST.xOff = Math.max(0, ST.xOff + (pw - xr) * (n0 - n1) / pw);   // 커서 아래 캔들이 제자리에 남도록
   }
   if (fp !== 1){
+    ST.scaled = true;
     const v = manual(), span = v.hi - v.lo;
     const u = Math.max(0, Math.min(1, (cy - viewTop) / viewPh));    // 커서의 세로 위치 비율
     const pc = v.hi - u * span, ns = Math.max(5, Math.min(200000, span * fp));
@@ -945,9 +948,9 @@ cv.addEventListener('wheel', e => {
   if (!ST.view){
     // 현재가가 가운데 고정된 상태: 가로만 커서 기준으로 확대·축소하고, 세로는 현재가를 가운데 둔 채 같은 비율로
     const span0 = ST.span || (viewHi - viewLo);
-    if (e.ctrlKey || e.metaKey){ ST.span = Math.max(5, Math.min(200000, span0 * f)); redraw(); return; }
+    if (e.ctrlKey || e.metaKey){ ST.span = Math.max(5, Math.min(200000, span0 * f)); ST.scaled = true; redraw(); return; }
     const n0 = ST.nf || ST.n; zoomAt(f, 1, p.x, p.y);
-    ST.span = Math.max(5, Math.min(200000, span0 * (ST.nf / n0)));
+    ST.span = Math.max(5, Math.min(200000, span0 * (ST.nf / n0))); ST.scaled = true;
     autoHalf = 0; redraw();
   } else {
     // 드래그로 옮긴 뒤: 커서 위치를 고정점으로 확대·축소
@@ -1019,7 +1022,7 @@ function chartDefaults(){
   ST.bucket = 0; $('bucket').value = '0';
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
-  ST.view = null; ST.span = null; ST.xOff = 0; autoHalf = 0; autoBucket = 0;
+  ST.view = null; ST.span = null; ST.scaled = false; ST.xOff = 0; autoHalf = 0; autoBucket = 0;
   depthCache = null; redraw();
 }
 // 오른쪽 아래 버튼: 과거를 보고 있으면 ▶| (현재로), 최신 화면인데 기본값과 다르면 ↺ (차트 기본값으로)
@@ -1033,7 +1036,7 @@ $('reset').addEventListener('click', () => {
   ST.bucket = 0; $('bucket').value = '0';
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
-  ST.view = null; ST.span = null; ST.xOff = 0;
+  ST.view = null; ST.span = null; ST.scaled = false; ST.xOff = 0;
   ST.dur = 900; $('interval').value = '5m';
   if (ST.interval !== '5m') changeInterval('5m'); else setN(180);
   depthCache = null;
