@@ -596,7 +596,10 @@ function render(){
   ST.xOff = Math.max(0, Math.min(ST.xOff, candles.length - 4));
   const whole = Math.floor(ST.xOff), frac = ST.xOff - whole;   // 소수 부분만큼 부드럽게 밀어서 그림
   const endIdx = candles.length - whole;
-  const P = lastPrice, vis = candles.slice(Math.max(0, endIdx - ST.n - (frac > 0 ? 1 : 0)), endIdx);
+  // 과거로 옮겼을 때 오른쪽 여백(가격 눈금 자리)에 걸친 더 최신 봉도 그려서, 화면 끝에 닿을 때까지 사라지지 않게
+  const slot0 = (cw - 56) / ST.n, bw0 = Math.max(1, slot0 * 0.7);
+  const ex = Math.min(whole, Math.max(0, Math.ceil((56 + slot0 / 2 + bw0 / 2) / slot0 - frac) - 1));
+  const P = lastPrice, vis = candles.slice(Math.max(0, endIdx - ST.n - (frac > 0 ? 1 : 0)), endIdx + ex);
   let lo, hi;
   if (ST.view){ lo = ST.view.lo; hi = ST.view.hi; }        // 직접 확대·이동한 범위 그대로
   else if (ST.span){ lo = P - ST.span / 2; hi = P + ST.span / 2; }   // 늘린 세로 비율 유지 + 현재가 가운데
@@ -631,7 +634,7 @@ function render(){
   }
   ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(cw + .5, 0); ctx.lineTo(cw + .5, H); ctx.stroke();
 
-  const plotW = cw - 56, slot = plotW / ST.n; viewSlot = slot; const _s = slot, bw = Math.max(1, _s * 0.7), off = ST.n - vis.length + frac;
+  const plotW = cw - 56, slot = plotW / ST.n; viewSlot = slot; const _s = slot, bw = Math.max(1, _s * 0.7), off = ST.n - (vis.length - ex) + frac;
   const xOf = i => (off + i) * slot + slot / 2;
   const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
   const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
@@ -785,6 +788,7 @@ function render(){
     const yo = y(c.o), yc = y(c.c);
     ctx.fillRect(x - w / 2, Math.min(yo, yc), w, Math.max(1, Math.abs(yo - yc)));
   };
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, H); ctx.clip();   // 호가 패널 쪽으로 넘치지 않게
   if (slot >= 2) vis.forEach((c, i) => drawCandle(xOf(i), c, bw));
   else {
     // 캔들이 1px보다 촘촘하면 같은 픽셀 칸에 들어가는 캔들을 하나로 합쳐 그림 (수만 개도 가볍게)
@@ -796,6 +800,7 @@ function render(){
     });
     if (col) drawCandle(cx + 1, col, 1.5);
   }
+  ctx.restore();
 
   // 실제 청산 체결 마커
   if (ST.force && vis.length){
@@ -1039,27 +1044,27 @@ function render(){
     let drawn = [], volCols = null;   // 실제로 그린 선의 꼭짓점(화면 좌표) / 거래량 막대 — 커서 점을 그래프 위에 정확히 얹는 데 씀
     const line = (pts, col, w = 1.3) => {   // pts: [x, v]
       ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); let lx = -9, started = false; drawn = [];
-      for (const [x, v] of pts){ if (started && Math.abs(x - lx) < 1) continue; const yy = Y(v); if (!started){ ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy); lx = x; drawn.push([x, yy]); }
+      for (const [x0, v] of pts){ const x = Math.min(cw, x0); if (started && Math.abs(x - lx) < 1) continue; const yy = Y(v); if (!started){ ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy); lx = x; drawn.push([x, yy]); }
       ctx.stroke(); ctx.lineWidth = 1;
     };
     if (pn.id === 'vol'){
       // 거래량: 캔들 색, 1px보다 촘촘하면 같은 칸끼리 합침
       const cols = [];
       vis.forEach((c, i) => {
-        const x = xOf(i); if (x < -2 || x > plotW + 2) return;
+        const x = xOf(i); if (x < -2 || x - bw / 2 > cw) return;
         if (slot >= 2) cols.push({ x, v:c.qv, up:c.c >= c.o, w:bw });
         else { const px = Math.floor(x / 2) * 2, lc = cols[cols.length - 1];
           if (lc && lc.px === px){ lc.v += c.qv; lc.net += c.c >= c.o ? c.qv : -c.qv; lc.up = lc.net >= 0; }
           else cols.push({ px, x:px + 1, v:c.qv, net:c.c >= c.o ? c.qv : -c.qv, up:c.c >= c.o, w:1.5 }); }
       });
       lo2 = 0; hi2 = Math.max(1e-9, ...cols.map(c => c.v)); grid();
-      for (const c of cols){ ctx.fillStyle = c.up ? 'rgba(38,166,154,.6)' : 'rgba(239,83,80,.6)'; const yy = Y(c.v); ctx.fillRect(c.x - c.w / 2, yy, c.w, bot2 - yy); }
+      for (const c of cols){ ctx.fillStyle = c.up ? 'rgba(38,166,154,.6)' : 'rgba(239,83,80,.6)'; const yy = Y(c.v); ctx.fillRect(c.x - c.w / 2, yy, Math.min(c.w, cw - (c.x - c.w / 2)), bot2 - yy); }
       volCols = cols;
       const vc = vis[vis.length - 1]; info = vc ? fu(vc.qv) : '';
       if (hIdx >= 0){ hv = vis[hIdx].qv; hTxt = fu(hv); }
     } else if (pn.id === 'rsi'){
       // RSI 14 (와일더 방식), 보이는 구간 앞쪽 500개로 미리 계산해 시작값을 안정화
-      const endI = candles.length - Math.floor(ST.xOff), startI = endI - vis.length, warm = Math.max(1, startI - 500);
+      const endI = candles.length - Math.floor(ST.xOff) + ex, startI = endI - vis.length, warm = Math.max(1, startI - 500);
       let ag = 0, al = 0, n0 = 0; const pts = [], rArr = [];
       for (let i = warm; i < endI; i++){
         const d = candles[i].c - candles[i - 1].c, g = d > 0 ? d : 0, l = d < 0 ? -d : 0;
