@@ -24,9 +24,11 @@ header .ref-rot{display:inline-grid}
 header .ref-rot .ref{grid-area:1/1;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s ease}
 header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 @media (prefers-reduced-motion:reduce){header .ref-rot .ref{transition:none}}
-header .mk{font-size:12px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+header .mk{font-size:14px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
 header .mk b{color:var(--ink)}
 header .mk .up{color:#0f9d58}header .mk .dn{color:#d93025}
+header .mk b.fu{color:#e5322d}header .mk b.fd{color:#1f6fe5}
+header .mk b{transition:color .25s}
 header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
 .switch{position:relative;cursor:pointer;gap:6px}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -1146,7 +1148,14 @@ changeInterval(ST.interval).then(initLiq);
 setInterval(pollOI, 15000);
 
 /* ---------------- 상단 시세: 테더 원화 가격, 코인베이스 프리미엄 ---------------- */
-let usdtKrw = null, cbPrice = null;
+let usdtKrw = null, cbPrice = null, usdtFlash = '', usdtFlashTimer = 0;
+// 테더 가격이 바뀌면 숫자를 잠깐 색칠: 오르면 빨강, 내리면 파랑
+function setUsdt(v){
+  if (!v || v === usdtKrw) return;
+  if (usdtKrw){ usdtFlash = v > usdtKrw ? 'fu' : 'fd'; clearTimeout(usdtFlashTimer); usdtFlashTimer = setTimeout(() => { usdtFlash = ''; drawUsdt(); }, 900); }
+  usdtKrw = v; drawUsdt();
+}
+function drawUsdt(){ $('mkUsdt').innerHTML = usdtKrw ? `USDT <b class="${usdtFlash}">₩${usdtKrw.toLocaleString('ko-KR', { maximumFractionDigits:1 })}</b>` : 'USDT ₩—'; }
 // 테더 원화: 업비트 웹소켓(브라우저에서 바로 받을 수 있음), 업비트가 30초 넘게 조용하면 빗썸 웹소켓 값 사용
 let upbitAt = 0;
 (function upbit(){
@@ -1154,11 +1163,11 @@ let upbitAt = 0;
   try { ws = new WebSocket('wss://api.upbit.com/websocket/v1'); } catch (e){ setTimeout(upbit, 5000); return; }
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => ws.send(JSON.stringify([{ ticket:'btc-chart' }, { type:'ticker', codes:['KRW-USDT'] }]));
-  ws.onmessage = ev => { try { const j = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data)); if (j.trade_price){ usdtKrw = +j.trade_price; upbitAt = Date.now(); } } catch (e){} };
+  ws.onmessage = ev => { try { const j = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data)); if (j.trade_price){ setUsdt(+j.trade_price); upbitAt = Date.now(); } } catch (e){} };
   ws.onclose = () => setTimeout(upbit, 3000); ws.onerror = () => ws.close();
 })();
 openWS('wss://pubwss.bithumb.com/pub/ws', m => {
-  const c = m && m.content; if (c && c.symbol === 'USDT_KRW' && +c.closePrice && Date.now() - upbitAt > 30000) usdtKrw = +c.closePrice;
+  const c = m && m.content; if (c && c.symbol === 'USDT_KRW' && +c.closePrice && Date.now() - upbitAt > 30000) setUsdt(+c.closePrice);
 }, ws => ws.send(JSON.stringify({ type:'ticker', symbols:['USDT_KRW'], tickTypes:['24H'] })));
 // 코인베이스 BTC-USD: 웹소켓으로 실시간, 끊겼을 때를 대비해 10초마다 REST로도 확인
 let cbWsAt = 0;
@@ -1177,7 +1186,6 @@ function binanceSpotMid(){   // 바이낸스 현물 호가 중간값 (없으면 
   return isFinite(bb) && isFinite(ba) && ba > bb ? (bb + ba) / 2 : lastPrice;
 }
 setInterval(() => {
-  $('mkUsdt').innerHTML = usdtKrw ? `USDT <b>₩${usdtKrw.toLocaleString('ko-KR', { maximumFractionDigits:1 })}</b>` : 'USDT ₩—';
   const ref = binanceSpotMid();
   if (cbPrice && ref){
     const d = cbPrice - ref, pc = d / ref * 100, cls = d >= 0 ? 'up' : 'dn', sg = d >= 0 ? '+' : '−';
