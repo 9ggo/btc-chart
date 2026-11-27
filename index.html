@@ -243,13 +243,10 @@ function openWS(url, onMsg, onOpen, onClose){
 function setErr(m){ lastErr = m; dirty = true; }
 
 /* ---------------- 캔들 ---------------- */
-async function loadKlines(){
-  const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${ST.interval}&limit=1500`);
+async function fetchKlines(iv){
+  const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${iv}&limit=1500`);
   if (!r.ok) throw new Error('캔들 HTTP ' + r.status);
-  const a = await r.json();
-  candles = a.map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9] }));
-  if (candles.length) lastPrice = candles[candles.length - 1].c;
-  dirty = true;
+  return (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9] }));
 }
 let lastKlineMsg = 0, marketOpen = false, forceAll = 0;
 async function priceFallback(){
@@ -264,6 +261,7 @@ async function priceFallback(){
   } catch (e){}
 }
 function onKline(k){
+  if (k.i && k.i !== ST.interval) return;   // 바꾸기 전 봉의 늦게 온 데이터는 무시
   lastKlineMsg = Date.now();
   const c = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, tb:+k.V };
   const last = candles[candles.length - 1];
@@ -667,7 +665,7 @@ function render(){
       if (ym < top + 8 || ym > bot - 8 || overlaps(placedG, ym - 8, ym + 8)) continue;
       placedG.push([ym - 8, ym + 8]);
       const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
-      const tw = ctx.measureText(t).width, x = plotW - Math.max(70, slot * 8);   // 최근 캔들을 가리지 않게 살짝 왼쪽
+      const tw = ctx.measureText(t).width, x = plotW - Math.max(40, slot * 4);   // 최근 캔들 4개쯤 왼쪽에서 끝나게
       ctx.globalAlpha = Math.max(.25, a);
       ctx.fillStyle = T.lbg; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
       ctx.fillStyle = g.kind === '취소' ? T.ghost : T.ghostF;
@@ -698,6 +696,13 @@ function render(){
     ctx.fillStyle = T.lbg; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
     ctx.fillStyle = T.hint; ctx.fillText(t, cw - 61, 13);
   });
+  if (loadingIv) L.push(() => {
+    const t = `${loadingIv} 봉 불러오는 중…`;
+    ctx.font = '600 12px sans-serif'; ctx.textAlign = 'center';
+    const tw = ctx.measureText(t).width;
+    ctx.fillStyle = T.lbg; ctx.fillRect(cw / 2 - tw / 2 - 8, 6, tw + 16, 20);
+    ctx.fillStyle = T.hint; ctx.fillText(t, cw / 2, 16);
+  });
   for (const f of L) f();
   ctx.font = '700 12px sans-serif'; ctx.textAlign = 'right';
   const pt = P.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 }), ptw = ctx.measureText(pt).width;
@@ -724,14 +729,29 @@ function startKlineWS(){
     if (d.e === 'kline') onKline(d.k); else if (d.e === 'forceOrder') onForce(d.o);
   }, () => { marketOpen = true; dirty = true; }, () => { marketOpen = false; dirty = true; });
 }
-async function changeInterval(){
-  try { await loadKlines(); lastErr = ''; } catch (e){ setErr(e.message); }
-  startKlineWS();
+// 봉 바꾸기: 새 데이터를 다 받은 뒤 한 번에 교체 → 받는 동안은 기존 차트를 그대로 보여줘서 화면이 번쩍이지 않음
+let loadingIv = null, ivReq = 0;
+async function changeInterval(iv){
+  const req = ++ivReq; loadingIv = iv; dirty = true;
+  try {
+    const data = await fetchKlines(iv);
+    if (req !== ivReq) return;                  // 그사이 다른 봉을 골랐으면 버림
+    ST.interval = iv; setN(ST.dur / IV_MIN[iv], true);
+    ST.xOff = 0; ST.view = null; ST.span = null;
+    candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
+    lastErr = '';
+    startKlineWS();
+  } catch (e){
+    if (req !== ivReq) return;
+    setErr(e.message); $('interval').value = ST.interval;
+    if (!klineWS) startKlineWS();
+  }
+  loadingIv = null; depthCache = null; dirty = true;
 }
 
 openWS(`wss://fstream.binance.com/public/stream?streams=${sym}@depth@100ms`, m => { if (m.data) futBook.handle(m.data); }, () => futBook.resync());
 openWS(`wss://stream.binance.com:9443/ws/${sym}@depth@100ms`, d => spotBook.handle(d), () => spotBook.resync());
-changeInterval().then(initLiq);
+changeInterval(ST.interval).then(initLiq);
 setInterval(pollOI, 15000);
 setInterval(() => futBook.merge(), 20000);
 setInterval(() => spotBook.merge(), 60000);
@@ -897,13 +917,12 @@ $('reset').addEventListener('click', () => {
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
   ST.view = null; ST.span = null; ST.xOff = 0;
-  const ivChanged = ST.interval !== '5m';
-  ST.interval = '5m'; $('interval').value = '5m'; setN(180);
+  ST.dur = 900; $('interval').value = '5m';
+  if (ST.interval !== '5m') changeInterval('5m'); else setN(180);
   depthCache = null;
-  if (ivChanged) changeInterval();
   redraw();
 });
-$('interval').addEventListener('change', e => { ST.interval = e.target.value; setN(ST.dur / IV_MIN[ST.interval], true); ST.xOff = 0; ST.view = null; ST.span = null; changeInterval(); });
+$('interval').addEventListener('change', e => changeInterval(e.target.value));
 }
 </script>
 </body>
