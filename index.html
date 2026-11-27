@@ -80,6 +80,7 @@ footer.folded{display:none}
   <label title="추정 청산을 가격 앞뒤로 얼마나 퍼뜨려 그릴지 (실제 레버리지·진입가가 제각각이라서)">청산 퍼짐 <select id="spread"><option value="0">점</option><option value="0.05">±0.05%</option><option value="0.1">±0.1%</option><option value="0.2">±0.2%</option></select></label>
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="0.5" value="0" style="width:64px">M</label>
+  <label title="호가 매물대에 바이낸스 현물 호가도 합쳐서 보여줌 (선물은 항상 포함)" style="cursor:pointer"><input id="spotOn" type="checkbox" checked style="cursor:pointer;margin:0 3px 0 0;vertical-align:-2px">현물 호가</label>
   <button id="reset" type="button">Reset</button>
   <div class="right">
   <span class="mk" id="mkUsdt" title="업비트 테더(USDT) 원화 가격">USDT ₩—</span>
@@ -1454,6 +1455,8 @@ function applyLook(){
 ST.spread = ['0','0.05','0.1','0.2'].includes(store.get('btcSpread')) ? +store.get('btcSpread') : 0.05;   // 기본 ±0.05%
 $('spread').value = String(ST.spread);
 $('spread').addEventListener('change', e => { ST.spread = +e.target.value; store.set('btcSpread', e.target.value); dirty = true; });
+ST.spot = store.get('btcSpot') !== '0'; $('spotOn').checked = ST.spot;   // 선물은 항상, 현물은 선택 (기본 켜짐)
+$('spotOn').addEventListener('change', e => { ST.spot = e.target.checked; store.set('btcSpot', ST.spot ? '1' : '0'); depthCache = null; redraw(); });
 ST.theme = store.get('btcTheme') === 'dark' ? 'dark' : 'light';   // 기본은 라이트 모드
 applyLook();
 // 하단 설명 접기/펼치기 (기억)
@@ -1511,6 +1514,7 @@ $('reset').addEventListener('click', () => {
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
   ST.spread = 0.05; $('spread').value = '0.05'; store.set('btcSpread', '0.05');
+  ST.spot = true; $('spotOn').checked = true; store.set('btcSpot', '1');
   ST.view = null; ST.span = null; ST.scaled = false; ST.xOff = 0;
   ST.dur = 900; $('interval').value = '5m';
   if (ST.interval !== '5m') changeInterval('5m'); else setN(180);
