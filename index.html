@@ -24,7 +24,9 @@ header .ref-rot{display:inline-grid}
 header .ref-rot .ref{grid-area:1/1;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s ease}
 header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 @media (prefers-reduced-motion:reduce){header .ref-rot .ref{transition:none}}
-header .mk{font-size:14px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 십자선 커서: 라이트=검정, 다크=흰색 */
+:root[data-theme=dark] #cv{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='23' height='23'%3E%3Cpath d='M11.5 0v23M0 11.5h23' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E") 11 11, crosshair;}
+header .mk{padding:2px 9px;border:1px solid var(--line);border-radius:7px;background:var(--btn);font-size:14px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
 header .mk b{color:var(--ink)}
 header .mk .up{color:#0f9d58}header .mk .dn{color:#d93025}
 header .mk b.fu{color:#e5322d}header .mk b.fd{color:#1f6fe5}
@@ -36,7 +38,6 @@ header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
 .switch i::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .18s}
 .switch input:checked+i::after{transform:translateX(18px)}
 .switch input:focus-visible+i{outline:2px solid #58a6ff;outline-offset:2px}
-.switch input:not(:checked)~span:first-of-type,.switch input:checked~span:last-of-type{color:var(--ink);font-weight:600}
 @media (prefers-reduced-motion:reduce){.switch i::after{transition:none}}
 header{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
 header b{font-size:14px;margin-right:4px}
@@ -47,7 +48,7 @@ input[type=checkbox]{accent-color:#58a6ff}
 button{background:var(--btn);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-weight:600;font-size:13px;line-height:1.4;font-family:inherit;cursor:pointer;font-variant-numeric:tabular-nums}
 button:active{background:var(--btn2)}
 #wrap{position:relative;flex:1;min-height:300px}
-#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='23' height='23'%3E%3Cpath d='M11.5 0v23M0 11.5h23' stroke='%23fff' stroke-width='3'/%3E%3Cpath d='M11.5 0v23M0 11.5h23' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 11 11, crosshair;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='23' height='23'%3E%3Cpath d='M11.5 0v23M0 11.5h23' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 11 11, crosshair;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px 12px;align-items:flex-end}
 .legend{flex:1 1 700px;min-width:0;max-height:52vh;overflow:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:6px 40px}
 .legend h4{margin:2px 0 6px;font-size:14px;color:var(--ink)}
@@ -1046,16 +1047,16 @@ function render(){
     ctx.save(); ctx.strokeStyle = ST.theme === 'light' ? '#000' : '#fff'; ctx.globalAlpha = .75; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;   // 십자선: 라이트=검정, 다크=흰색
     ctx.beginPath(); ctx.moveTo(hx, top); ctx.lineTo(hx, axTop); ctx.stroke();
     const inMain = hover.y >= top && hover.y <= bot;
-    if (inMain){ ctx.beginPath(); ctx.moveTo(0, Math.round(hover.y) + .5); ctx.lineTo(cw, Math.round(hover.y) + .5); ctx.stroke(); }
+    if (inMain){ ctx.beginPath(); ctx.moveTo(0, Math.round(hover.y) + .5); ctx.lineTo(cw + 2, Math.round(hover.y) + .5); ctx.stroke(); }
     ctx.restore();
     ctx.textBaseline = 'middle';
     if (inMain){   // 커서 높이의 가격
       const pv = hi - (hover.y - top) / ph * (hi - lo);
       const txt = pv.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
       ctx.font = '700 11px sans-serif'; ctx.textAlign = 'right'; const tw = ctx.measureText(txt).width;
-      const PW = 18, bx = cw - tw - 10 - PW;   // 왼쪽 + 버튼 칸, 오른쪽 숫자
+      const PW = 18, bx = cw + 2;   // 호가창 쪽에 표시: 왼쪽 + 버튼 칸, 오른쪽 숫자
       ctx.fillStyle = T.inkS; ctx.fillRect(bx, hover.y - 9, tw + 8 + PW, 18);
-      ctx.fillStyle = T.bg; ctx.fillText(txt, cw - 6, hover.y);
+      ctx.fillStyle = T.bg; ctx.textAlign = 'left'; ctx.fillText(txt, bx + PW + 4, hover.y); ctx.textAlign = 'right';
       ctx.fillRect(bx + PW, hover.y - 6, 1, 12);   // 구분선
       ctx.strokeStyle = T.bg; ctx.lineWidth = 1.6; ctx.beginPath();
       ctx.moveTo(bx + PW / 2 - 4, hover.y); ctx.lineTo(bx + PW / 2 + 4, hover.y); ctx.moveTo(bx + PW / 2, hover.y - 4); ctx.lineTo(bx + PW / 2, hover.y + 4); ctx.stroke(); ctx.lineWidth = 1;
@@ -1064,7 +1065,7 @@ function render(){
         ctx.fillStyle = T.hint; ctx.fillRect(bx - cwid - 14, hover.y - 9, cwid + 10, 18); ctx.fillStyle = '#fff'; ctx.fillText(ct, bx - 9, hover.y);
       }
       priceTag = { x0:bx - 2, x1:bx + PW + 1, y0:hover.y - 10, y1:hover.y + 10, val:pv.toFixed(1) };
-      priceBox = { x0:bx - 4, x1:cw + 2, y0:hover.y - 12, y1:hover.y + 12 };
+      priceBox = { x0:bx - 4, x1:bx + tw + 8 + PW + 4, y0:hover.y - 12, y1:hover.y + 12 };
     }
     { // 시간축의 시각
       const d = new Date(c.t), txt = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -1316,7 +1317,11 @@ cv.addEventListener('pointermove', e => {
     const p = posOf(e);
     const onBox = !ptrs.size && priceTag && p.x >= priceTag.x0 - 2 && p.x <= priceTag.x1 + 2 && p.y >= priceTag.y0 - 2 && p.y <= priceTag.y1 + 2;   // + 버튼 위에서만 고정 (숫자 위에서는 고정 안 함)
     if (onBox && !freezeY) freezeY = { lo:viewLo, hi:viewHi }; else if (!onBox) freezeY = null;
-    hover = p.x <= viewPlotW + 56 ? p : null; redraw();
+    const overTag = priceBox && p.x >= priceBox.x0 && p.x <= priceBox.x1 && p.y >= priceBox.y0 - 8 && p.y <= priceBox.y1 + 8;
+    if (p.x <= viewPlotW + 56) hover = p;
+    else if (overTag && hover) hover = { x:hover.x, y:p.y };   // 호가창 쪽 가격표로 옮겨 가는 동안 십자선 유지
+    else hover = null;
+    redraw();
   }
   if (!ptrs.size && e.pointerType === 'mouse'){   // 마우스 모양: 제목줄은 위아래 화살표, 버튼은 손가락
     const q = posOf(e), h = paneAt(q), onTag = priceTag && q.x >= priceTag.x0 && q.x <= priceTag.x1 && q.y >= priceTag.y0 && q.y <= priceTag.y1;
