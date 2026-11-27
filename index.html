@@ -513,9 +513,9 @@ function render(){
         const y0 = y((g.k + 1) * B), h = Math.max(1, y(g.k * B) - y0), r = Math.min(1, g.u / mx);
         // 회색빛으로 흐리게: 살아있는 매물과 확실히 구분
         const lt = ST.theme === 'light', da = (lt ? 0.10 + 0.22 * r : 0.06 + 0.16 * r).toFixed(3);
-        ctx.fillStyle = g.side === 'L' ? `rgba(${lt ? '60,75,105' : '150,120,80'},${da})` : `rgba(${lt ? '105,60,60' : '130,100,150'},${da})`;
+        ctx.fillStyle = g.side === 'L' ? `rgba(${lt ? '78,82,90' : '128,128,134'},${da})` : `rgba(${lt ? '90,80,80' : '134,128,128'},${da})`;   // 색조를 거의 뺀 회색
         ctx.fillRect(x0, y0, x1 - x0, h);
-        ctx.fillStyle = g.side === 'L' ? 'rgba(255,190,90,.45)' : 'rgba(210,160,255,.45)'; ctx.fillRect(x1 - 1, y0, 1.5, h);   // 닿은 지점
+        ctx.fillStyle = lt ? 'rgba(70,74,80,.5)' : 'rgba(170,170,176,.5)'; ctx.fillRect(x1 - 1, y0, 1.5, h);   // 닿은 지점
         ctx.globalAlpha = 1;
       }
       // 살아있는 매물: 시간순으로 누적되며 진해짐
