@@ -50,7 +50,7 @@ footer.folded #status{margin-left:auto}
   <div class="legend">
     <p><i class="sw" style="background:var(--bid)"></i><i class="sw" style="background:var(--ask)"></i>오른쪽의 진한 초록·빨강 막대는 선물 호가의 매수벽·매도벽이고, <i class="sw" style="background:rgba(38,166,154,.4)"></i><i class="sw" style="background:rgba(239,83,80,.4)"></i>옅은 막대는 현물 호가의 매수벽·매도벽입니다.</p>
     <p><i class="sw" id="swL"></i>파란 띠는 롱 포지션 청산이 몰려 있을 것으로 추정되는 가격대, <i class="sw" id="swS"></i>빨간 띠는 숏 포지션 청산이 몰려 있을 것으로 추정되는 가격대이며, 색이 진할수록 규모가 큽니다.</p>
-    <p>흐린 회색 띠는 가격이 이미 닿아 소진된 청산 물량으로, 띠 끝의 세로 눈금이 가격이 닿은 시점이며 시간이 지날수록 옅어지다 사라집니다. 호가는 가격이 움직일수록 확인된 범위가 점점 넓어집니다. ▼·▲ 삼각형은 실제로 체결된 롱·숏 청산입니다.</p>
+    <p>흐린 회색 띠는 가격이 이미 닿아 소진된 청산 물량으로, 띠 끝의 세로 눈금이 가격이 닿은 시점이며 시간이 지날수록 옅어지다 사라지는데, 규모가 큰 물량일수록 더 오래 남습니다. 호가는 가격이 움직일수록 확인된 범위가 점점 넓어집니다. ▼·▲ 삼각형은 실제로 체결된 롱·숏 청산입니다.</p>
     <p>매수·매도 쪽마다 가장 큰 매물벽 3개는 점선으로 표시되고, 2분 이상 유지되면 실선과 테두리로 바뀝니다. 유지 시간 앞의 ≥ 표시는 차트를 열기 전부터 있던 벽이라는 뜻입니다.</p>
     <p>회색 취소선이 그어진 라벨은 가격이 닿기 전에 사라진 벽으로 스푸핑일 가능성이 있고, 노란 라벨은 가격이 닿아 체결된 벽입니다.</p>
     <p>마우스 휠을 돌리면 커서 위치를 중심으로 가로·세로가 같은 비율로 확대·축소되고, Ctrl+휠은 가격축만 확대·축소합니다(터치 화면은 두 손가락으로 벌리거나 오므리기). 드래그로 상하좌우 이동합니다. 더블클릭하거나 두 번 탭하면 현재 위치로 돌아옵니다.</p>
@@ -405,7 +405,8 @@ function render(){
   else {                                              // 자동 맞춤
     lo = P * (1 - ST.range / 100); hi = P * (1 + ST.range / 100);
     for (const c of vis){ if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; }
-    const pd = (hi - lo) * 0.02; lo -= pd; hi += pd;
+    const half = Math.max(P - lo, hi - P) * 1.02;     // 현재가가 세로 가운데에 오도록 위아래 대칭
+    lo = P - half; hi = P + half;
   }
   viewLo = lo; viewHi = hi; viewSpan = hi - lo; viewPh = ph; viewTop = top; viewPlotW = cw - 56;
   const y = p => top + (hi - p) / (hi - lo) * ph;
@@ -452,9 +453,11 @@ function render(){
         const g = dg.get(key);
         if (g){ g.t = Math.min(g.t, e.t); g.u += e.usd; } else dg.set(key, { side:e.side, k, t:e.t, end:e.end, u:e.usd });
       }
-      const FADE = tStep * ST.n / 3;   // 보이는 기간의 1/3에 걸쳐 점점 옅어지다 사라짐
+      const FADE = tStep * ST.n / 3;   // 기본: 보이는 기간의 1/3에 걸쳐 옅어지다 사라짐
       for (const g of dg.values()){
-        const fade = 1 - (now0 - g.end) / FADE; if (fade <= 0) continue;
+        // 규모가 클수록 오래 남음: 작으면 기본의 0.5배, 가장 크면 2.5배
+        const life = FADE * (0.5 + 2 * Math.sqrt(Math.min(1, g.u / mx)));
+        const fade = 1 - (now0 - g.end) / life; if (fade <= 0) continue;
         const x0 = xT(g.t), x1 = xT(g.end); if (x1 - x0 < 1) continue;
         ctx.globalAlpha = fade;
         const y0 = y((g.k + 1) * B), h = Math.max(1, y(g.k * B) - y0), r = Math.min(1, g.u / mx);
