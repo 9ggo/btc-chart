@@ -83,19 +83,20 @@ footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12
       <div class="row"><dt>유지 시간</dt><dd>매물벽이 유지된 시간입니다. ≥ 표시는 차트를 열기 전부터 있던 벽입니다.</dd></div>
       <div class="row"><dt>취소</dt><dd>가격이 닿기 전에 사라진 큰 벽입니다. 스푸핑일 가능성이 있습니다.</dd></div>
       <div class="row"><dt>체결</dt><dd>가격이 닿아 실제로 소화된 큰 벽입니다.</dd></div>
-      <div class="row"><dt>거래량</dt><dd>봉마다 거래된 BTC 수량입니다. 오른 봉은 초록, 내린 봉은 빨강입니다.</dd></div>
+      <div class="row"><dt>거래량</dt><dd>봉마다 거래된 금액(달러)입니다. 오른 봉은 초록, 내린 봉은 빨강입니다.</dd></div>
       <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다.</dd></div>
-      <div class="row"><dt>미결제약정 OI</dt><dd>아직 청산되지 않은 선물 포지션 총량(BTC)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
-      <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 거래량입니다. 오르면 매수 우위입니다.</dd></div>
+      <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
+      <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 오르면 매수 우위입니다.</dd></div>
       <div class="row"><dt>호가 데이터 끝</dt><dd>지금까지 확인된 호가 범위의 끝입니다. 가격이 움직일수록 범위가 넓어집니다.</dd></div>
     </dl></section>
     <section><h4>조작 방법</h4><dl>
+      <div class="row"><dt>커서 올리기 · 탭</dt><dd>그 시점 봉의 시가·고가·저가·종가와 각 지표 값, 커서 높이의 가격이 표시됩니다.</dd></div>
       <div class="row"><dt>휠</dt><dd>현재가가 가운데 고정된 상태에서는 커서 위치를 기준으로 시간축을 확대·축소하고 현재가는 가운데에 그대로 둡니다. 드래그로 옮긴 뒤에는 커서 위치를 기준으로 확대·축소합니다.</dd></div>
       <div class="row"><dt>Ctrl + 휠</dt><dd>가격축만 확대·축소합니다.</dd></div>
       <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다.</dd></div>
       <div class="row"><dt>두 손가락 (터치)</dt><dd>가로로 벌리면 시간축, 세로로 벌리면 가격축을 확대·축소합니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</dd></div>
-      <div class="row"><dt>지표 제목줄</dt><dd>클릭하면 접히거나 펼쳐지고, 위아래로 끌면 높이가 바뀝니다. 오른쪽 ▲ ▼로 순서를 바꿉니다.</dd></div>
+      <div class="row"><dt>지표 제목줄</dt><dd>위아래로 끌면 높이가 바뀝니다. 오른쪽 ▲ ▼로 순서를 바꾸고, ▾ ▸로 접거나 펼칩니다.</dd></div>
       <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드를 뺀 모든 설정(지표 패널 포함)을 기본값으로 되돌립니다.</dd></div>
     </dl></section>
   </div>
@@ -119,7 +120,8 @@ let panes = PANE_DEF();
 try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
   if (Array.isArray(sv) && sv.length === 4 && PANE_DEF().every(d => sv.some(p => p.id === d.id))) panes = sv.map(p => ({ id:p.id, open:!!p.open, h:Math.max(30, Math.min(400, +p.h || 56)) })); } catch (e){}
 const savePanes = () => { try { localStorage.setItem('btcPanes', JSON.stringify(panes)); } catch (e){} };
-let paneHits = [];      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
+let paneHits = [];
+let hover = null;   // 커서(또는 탭) 위치 {x, y}: 그 시점의 시가·고가·저가·종가와 지표 값 표시      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
 let oiHist = [];        // [{t, v}] 미결제약정(BTC)
 const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h' };
 async function loadOI(iv){
@@ -128,8 +130,8 @@ async function loadOI(iv){
     if (!r.ok) return;
     const a = await r.json();
     if (iv !== ST.interval) return;
-    oiHist = a.map(o => ({ t:o.timestamp, v:+o.sumOpenInterest }));
-    if (lastOI) oiHist.push({ t:Date.now(), v:lastOI });
+    oiHist = a.map(o => ({ t:o.timestamp, v:+o.sumOpenInterestValue || +o.sumOpenInterest * lastPrice }));
+    if (lastOI && lastPrice) oiHist.push({ t:Date.now(), v:lastOI * lastPrice });
     dirty = true;
   } catch (e){}
 }
@@ -296,7 +298,7 @@ function setErr(m){ lastErr = m; dirty = true; }
 async function fetchKlines(iv){
   const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${iv}&limit=1500`);
   if (!r.ok) throw new Error('캔들 HTTP ' + r.status);
-  return (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9] }));
+  return (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9], qv:+k[7] || +k[5] * +k[4], tq:+k[10] || +k[9] * +k[4] }));
 }
 let lastKlineMsg = 0, marketOpen = false, forceAll = 0;
 async function priceFallback(){
@@ -313,7 +315,7 @@ async function priceFallback(){
 function onKline(k){
   if (k.i && k.i !== ST.interval) return;   // 바꾸기 전 봉의 늦게 온 데이터는 무시
   lastKlineMsg = Date.now();
-  const c = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, tb:+k.V };
+  const c = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, tb:+k.V, qv:+k.q || +k.v * +k.c, tq:+k.Q || +k.V * +k.c };
   const last = candles[candles.length - 1];
   if (last && last.t === c.t) candles[candles.length - 1] = c;
   else if (!last || c.t > last.t){ candles.push(c); if (candles.length > MAXN + 2000) candles.shift(); }
@@ -413,7 +415,7 @@ async function pollOI(){
       if (oi > lastOI) addPos(lastPrice, oi - lastOI, share(c.tb, c.v));
       else if (lastOI > 0) scaleLiq(oi / lastOI);
     }
-    lastOI = oi; oiHist.push({ t:Date.now(), v:oi }); if (oiHist.length > 6000) oiHist.shift(); dirty = true;
+    lastOI = oi; if (lastPrice) oiHist.push({ t:Date.now(), v:oi * lastPrice }); if (oiHist.length > 6000) oiHist.shift(); dirty = true;
   } catch (e){}
 }
 
@@ -538,6 +540,7 @@ function render(){
   const xOf = i => (off + i) * slot + slot / 2;
   const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
   const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
+  const hIdx = hover && hover.x >= 0 && hover.x <= cw ? Math.max(0, Math.min(vis.length - 1, Math.round((hover.x - slot / 2) / slot - off))) : -1;
 
   const tickXs = [];
   // 하단 시간축: 캔들 시각이 눈금 경계를 넘는 첫 캔들에 라벨 (4시간봉처럼 경계와 어긋난 봉도 표시)
@@ -869,23 +872,26 @@ function render(){
     ctx.fillStyle = T.lbg; ctx.fillRect(0, y0, W, HDR);
     ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, y0 + .5); ctx.lineTo(W, y0 + .5); ctx.stroke();
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = '700 11px sans-serif'; ctx.fillStyle = T.inkS;
-    ctx.fillText((pn.open ? '▾ ' : '▸ ') + PANE_NAME[pn.id], 6, y0 + HDR / 2 + 1);
-    const nameW = ctx.measureText((pn.open ? '▾ ' : '▸ ') + PANE_NAME[pn.id]).width;
-    // 순서 버튼 ▲ ▼ (패널 오른쪽 끝)
+    ctx.fillText(PANE_NAME[pn.id], 8, y0 + HDR / 2 + 1);
+    const nameW = ctx.measureText(PANE_NAME[pn.id]).width;
+    // 오른쪽 끝 버튼: ▲ ▼ 순서 변경, ▾/▸ 접기·펼치기
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center';
-    [['▲', 'up', cw - 44], ['▼', 'down', cw - 20]].forEach(([g, act, bx]) => {
+    [['▲', 'up', cw - 68], ['▼', 'down', cw - 44], [pn.open ? '▾' : '▸', 'fold', cw - 20]].forEach(([g, act, bx]) => {
       const dis = (act === 'up' && pi === 0) || (act === 'down' && pi === panes.length - 1);
-      ctx.fillStyle = dis ? T.grid : T.ink; ctx.fillText(g, bx, y0 + HDR / 2 + 1);
+      if (act === 'fold'){ ctx.font = '700 14px sans-serif'; }
+      ctx.fillStyle = dis ? T.grid : act === 'fold' ? T.inkS : T.ink; ctx.fillText(g, bx, y0 + HDR / 2 + 1);
+      ctx.font = '600 11px sans-serif';
       if (!dis) paneHits.push({ x0:bx - 11, x1:bx + 11, y0, y1, act, id:pn.id });
     });
-    paneHits.push({ x0:0, x1:cw - 56, y0:y0 - 3, y1, act:'head', id:pn.id });
+    paneHits.push({ x0:0, x1:cw - 80, y0:y0 - 3, y1, act:'head', id:pn.id });
     py = y1;
     if (!h){ return; }
     const top2 = py, bot2 = py + h - 2;
     ctx.save(); ctx.beginPath(); ctx.rect(0, top2, W, h); ctx.clip();
     ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
     for (const x of tickXs){ ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, top2); ctx.lineTo(Math.round(x) + .5, bot2); ctx.stroke(); }
-    let info = '', lo2 = 0, hi2 = 1, fmt = nf;
+    let info = '', lo2 = 0, hi2 = 1, fmt = v => fu(Math.abs(v)).replace('$', v < 0 ? '-$' : '$');
+    const at = arr => hIdx >= 0 && arr[hIdx] != null ? arr[hIdx] : arr[arr.length - 1];   // 커서가 있으면 그 봉의 값
     const Y = v => bot2 - (v - lo2) / (hi2 - lo2 || 1) * (bot2 - top2 - 3);
     const line = (pts, col, w = 1.3) => {   // pts: [x, v]
       ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); let lx = -9, started = false;
@@ -897,23 +903,23 @@ function render(){
       const cols = [];
       vis.forEach((c, i) => {
         const x = xOf(i); if (x < -2 || x > plotW + 2) return;
-        if (slot >= 2) cols.push({ x, v:c.v, up:c.c >= c.o, w:bw });
+        if (slot >= 2) cols.push({ x, v:c.qv, up:c.c >= c.o, w:bw });
         else { const px = Math.floor(x / 2) * 2, lc = cols[cols.length - 1];
-          if (lc && lc.px === px){ lc.v += c.v; lc.net += c.c >= c.o ? c.v : -c.v; lc.up = lc.net >= 0; }
-          else cols.push({ px, x:px + 1, v:c.v, net:c.c >= c.o ? c.v : -c.v, up:c.c >= c.o, w:1.5 }); }
+          if (lc && lc.px === px){ lc.v += c.qv; lc.net += c.c >= c.o ? c.qv : -c.qv; lc.up = lc.net >= 0; }
+          else cols.push({ px, x:px + 1, v:c.qv, net:c.c >= c.o ? c.qv : -c.qv, up:c.c >= c.o, w:1.5 }); }
       });
       lo2 = 0; hi2 = Math.max(1e-9, ...cols.map(c => c.v));
       for (const c of cols){ ctx.fillStyle = c.up ? 'rgba(38,166,154,.6)' : 'rgba(239,83,80,.6)'; const yy = Y(c.v); ctx.fillRect(c.x - c.w / 2, yy, c.w, bot2 - yy); }
-      const last = vis[vis.length - 1]; info = last ? `${nf(last.v)} BTC` : '';
+      const vc = hIdx >= 0 ? vis[hIdx] : vis[vis.length - 1]; info = vc ? fu(vc.qv) : '';
     } else if (pn.id === 'rsi'){
       // RSI 14 (와일더 방식), 보이는 구간 앞쪽 500개로 미리 계산해 시작값을 안정화
       const endI = candles.length - Math.floor(ST.xOff), startI = endI - vis.length, warm = Math.max(1, startI - 500);
-      let ag = 0, al = 0, n0 = 0; const pts = [];
+      let ag = 0, al = 0, n0 = 0; const pts = [], rArr = [];
       for (let i = warm; i < endI; i++){
         const d = candles[i].c - candles[i - 1].c, g = d > 0 ? d : 0, l = d < 0 ? -d : 0;
         if (n0 < 14){ ag += g / 14; al += l / 14; n0++; }
         else { ag = (ag * 13 + g) / 14; al = (al * 13 + l) / 14; }
-        if (i >= startI && n0 >= 14){ const r = al === 0 ? 100 : 100 - 100 / (1 + ag / al); pts.push([xOf(i - startI), r]); }
+        if (i >= startI && n0 >= 14){ const r = al === 0 ? 100 : 100 - 100 / (1 + ag / al); pts.push([xOf(i - startI), r]); rArr[i - startI] = r; }
       }
       lo2 = 0; hi2 = 100;
       ctx.setLineDash([3, 3]); ctx.strokeStyle = T.mute; ctx.globalAlpha = .6;
@@ -921,32 +927,70 @@ function render(){
       ctx.setLineDash([]); ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(142,91,214,.08)'; ctx.fillRect(0, Y(70), cw, Y(30) - Y(70));
       line(pts, '#8e5bd6');
-      info = pts.length ? pts[pts.length - 1][1].toFixed(1) : '';
+      { const r = at(rArr); info = r != null ? r.toFixed(1) : ''; }
       fmt = v => v.toFixed(0);
+
     } else if (pn.id === 'oi'){
       // 미결제약정: 바이낸스 OI 기록(봉 간격에 맞춘 주기) + 15초마다 받는 실시간 값
       const t1 = vis[vis.length - 1].t + tStep, pts = oiHist.filter(o => o.t >= t0 - tStep * 2 && o.t <= t1 + tStep).map(o => [Math.min(cw, (off + (o.t - t0) / tStep) * slot + slot / 2), o.v]);
       if (pts.length){
         lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad;
         line(pts, '#d18b00', 1.5);
-        const a = pts[0][1], b = pts[pts.length - 1][1]; info = `${nf(b)} BTC (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
+        let b = pts[pts.length - 1][1];
+        if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht); if (pr.length) b = pr[pr.length - 1].v; }
+        const a = pts[0][1]; info = `${fu(b)} (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
       } else info = ST.xOff > 0 ? '이 구간 기록 없음 (최근 약 30일까지만 제공)' : '불러오는 중…';
     } else if (pn.id === 'cvd'){
       // CVD: 화면 왼쪽 끝부터 누적한 (시장가 매수 - 시장가 매도) 거래량
-      let cum = 0; const pts = [];
-      vis.forEach((c, i) => { cum += 2 * (c.tb || 0) - c.v; pts.push([xOf(i), cum]); });
+      let cum = 0; const pts = [], cArr = [];
+      vis.forEach((c, i) => { cum += 2 * (c.tq || 0) - (c.qv || 0); pts.push([xOf(i), cum]); cArr[i] = cum; });
       lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad;
       ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1;
       line(pts, '#1f77d0', 1.5);
-      info = `${cum >= 0 ? '+' : ''}${nf(cum)} BTC`;
+      { const v = at(cArr); info = (v >= 0 ? '+' : '') + fmt(v); }
     }
     ctx.restore();
     // 오른쪽 축 값(최대·최소)과 제목줄의 현재 값
     ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
     ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5);
-    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = T.ink; ctx.fillText(info, 14 + nameW, y0 + HDR / 2 + 1);
+    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = hIdx >= 0 ? T.hint : T.ink; ctx.fillText(info, 16 + nameW, y0 + HDR / 2 + 1);
     py += h;
   });
+
+  // ---------- 커서 위치 정보: 세로·가로 선, 그 봉의 시가·고가·저가·종가, 가격·시각 표시 ----------
+  if (hIdx >= 0 && vis[hIdx]){
+    const c = vis[hIdx], hx = Math.round(xOf(hIdx)) + .5;
+    ctx.save(); ctx.strokeStyle = T.mute; ctx.globalAlpha = .7; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, top); ctx.lineTo(hx, axTop); ctx.stroke();
+    const inMain = hover.y >= top && hover.y <= bot;
+    if (inMain){ ctx.beginPath(); ctx.moveTo(0, Math.round(hover.y) + .5); ctx.lineTo(cw, Math.round(hover.y) + .5); ctx.stroke(); }
+    ctx.restore();
+    ctx.textBaseline = 'middle';
+    if (inMain){   // 커서 높이의 가격
+      const pv = hi - (hover.y - top) / ph * (hi - lo), txt = pv.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
+      ctx.font = '700 11px sans-serif'; ctx.textAlign = 'right'; const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = T.inkS; ctx.fillRect(cw - tw - 10, hover.y - 9, tw + 8, 18); ctx.fillStyle = T.bg; ctx.fillText(txt, cw - 6, hover.y);
+    }
+    { // 시간축의 시각
+      const d = new Date(c.t), txt = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; const tw = ctx.measureText(txt).width, tx = Math.max(tw / 2 + 4, Math.min(cw - tw / 2 - 4, hx));
+      ctx.fillStyle = T.inkS; ctx.fillRect(tx - tw / 2 - 5, axTop + 4, tw + 10, AX - 8); ctx.fillStyle = T.bg; ctx.fillText(txt, tx, axTop + AX / 2);
+    }
+    { // 왼쪽 위: 시가·고가·저가·종가
+      const f = v => v.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
+      const chg = (c.c - c.o) / c.o * 100, col = c.c >= c.o ? '#1a9c8f' : '#e04848';
+      const parts = [['시', f(c.o)], ['고', f(c.h)], ['저', f(c.l)], ['종', f(c.c)], ['', (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%']];
+      ctx.font = '600 12px sans-serif'; ctx.textAlign = 'left';
+      let x = 10; const yy = top + 12, widths = parts.map(([k, v]) => ctx.measureText(k + ' ' + v).width + 12);
+      ctx.fillStyle = T.lbg; ctx.fillRect(4, top + 1, widths.reduce((a, b) => a + b, 0) + 8, 22);
+      for (let i = 0; i < parts.length; i++){
+        const [k, v] = parts[i];
+        if (k){ ctx.fillStyle = T.mute; ctx.fillText(k, x, yy); }
+        ctx.fillStyle = col; ctx.fillText(v, x + (k ? ctx.measureText(k + ' ').width : 0), yy);
+        x += widths[i];
+      }
+    }
+  }
 }
 
 function updateStatus(){
@@ -978,7 +1022,7 @@ async function ensureHistory(need){
     while (candles.length < need && candles.length < MAXN + 1500){
       const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${iv}&endTime=${candles[0].t - 1}&limit=1500`);
       if (!r.ok) break;
-      const a = (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9] }));
+      const a = (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9], qv:+k[7] || +k[5] * +k[4], tq:+k[10] || +k[9] * +k[4] }));
       if (req !== ivReq || iv !== ST.interval) return;   // 그사이 봉을 바꿨으면 중단
       if (!a.length){ noMoreOlder = true; break; }       // 상장 이전까지 다 받음
       candles = a.concat(candles); dirty = true;           // 오른쪽 기준 위치(xOff)라 화면은 그대로
@@ -1090,6 +1134,7 @@ cv.addEventListener('pointerdown', e => {
   if (hp){   // 지표 제목줄: ▲▼ = 순서 변경, 제목줄 클릭 = 접기/펼치기, 위아래로 끌기 = 높이 조절
     try { cv.setPointerCapture(e.pointerId); } catch (_){}
     const i = panes.findIndex(p => p.id === hp.id);
+    if (hp.act === 'fold'){ panes[i].open = !panes[i].open; savePanes(); redraw(); return; }
     if (hp.act === 'up' || hp.act === 'down'){
       const j = hp.act === 'up' ? i - 1 : i + 1; [panes[i], panes[j]] = [panes[j], panes[i]]; savePanes(); redraw(); return;
     }
@@ -1111,6 +1156,7 @@ cv.addEventListener('pointermove', e => {
     if (paneDrag.moved){ const p = panes.find(q => q.id === paneDrag.id); p.h = Math.max(30, Math.min(400, paneDrag.h0 - dy)); p.open = true; redraw(); }
     return;
   }
+  if (e.pointerType === 'mouse'){ const p = posOf(e); hover = p.x <= viewPlotW + 56 ? p : null; redraw(); }
   if (!ptrs.size && e.pointerType === 'mouse'){   // 마우스 모양: 제목줄은 위아래 화살표, 버튼은 손가락
     const h = paneAt(posOf(e)); const c = h ? (h.act === 'head' ? 'ns-resize' : 'pointer') : 'grab';
     if (cv.style.cursor !== c) cv.style.cursor = c;
@@ -1125,7 +1171,7 @@ cv.addEventListener('pointermove', e => {
   }
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  if (Math.hypot(dx, dy) > 6) drag.moved = true;
+  if (Math.hypot(dx, dy) > 6){ drag.moved = true; if (e.pointerType !== 'mouse') hover = null; }
   if (drag.moved){
     if (!drag.v) drag.v = { ...manual() };
     const d = dy * (drag.v.hi - drag.v.lo) / viewPh;   // 아래로 끌면 위쪽 가격대가 보임
@@ -1137,7 +1183,6 @@ cv.addEventListener('pointermove', e => {
 function endPtr(e){
   if (paneDrag && e.pointerId === paneDrag.pid){
     const p = panes.find(q => q.id === paneDrag.id);
-    if (!paneDrag.moved && e.type === 'pointerup') p.open = !p.open;
     paneDrag = null; savePanes(); redraw(); return;
   }
   ptrs.delete(e.pointerId);
@@ -1145,10 +1190,11 @@ function endPtr(e){
   if (drag && !drag.moved && e.type === 'pointerup' && e.pointerType !== 'mouse'){   // 마우스는 dblclick 이벤트가 따로 처리
     const now = Date.now();
     if (now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30){ resetView(); lastTap.t = 0; }
-    else lastTap = { t:now, x:e.clientX, y:e.clientY };
+    else { lastTap = { t:now, x:e.clientX, y:e.clientY }; const p = posOf(e); hover = p.x <= viewPlotW + 56 ? p : null; redraw(); }   // 터치: 탭한 곳 정보 표시
   }
   drag = null;
 }
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse'){ hover = null; redraw(); } });
 cv.addEventListener('pointerup', endPtr);
 cv.addEventListener('pointercancel', endPtr);
 cv.addEventListener('dblclick', e => { if (!e || !paneAt(posOf(e))) resetView(); });
