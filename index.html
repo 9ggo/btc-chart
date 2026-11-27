@@ -983,15 +983,18 @@ function render(){
     ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
     if (yt.length){ for (const v of yt){ const yy = Y(v); if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.fillText(fmt(v), cw + 4, yy); } }
     else { ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5); }
-    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = T.ink; ctx.fillText(info, 16 + nameW, y0 + HDR / 2 + 1);
-    // 커서가 가리키는 봉: 그 값의 높이에 점과 숫자를 바로 옆에 표시
+    // 제목줄: 커서가 차트·지표 위에 있으면 그 봉의 값, 밖이면 최신 값
+    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = hv != null ? T.hint : T.ink; ctx.fillText(hv != null ? hTxt : info, 16 + nameW, y0 + HDR / 2 + 1);
+    // 커서가 가리키는 봉: 그 값의 높이에 작은 점, 커서가 이 지표 안에 있을 때만 옆에 숫자
     if (hv != null && hTxt){
       const hx = xOf(hIdx), vy = Math.max(top2 + 7, Math.min(bot2 - 7, Y(pn.id === 'vol' ? hv : hv)));
-      ctx.beginPath(); ctx.arc(hx, vy, 3, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, vy, 2, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();
+      if (hover.y >= top2 && hover.y <= bot2 + 2){
       ctx.font = '700 11px sans-serif'; const tw = ctx.measureText(hTxt).width;
       const right = hx + 8 + tw + 8 <= cw, bx = right ? hx + 8 : hx - 8 - tw - 8;
       ctx.fillStyle = T.inkS; ctx.fillRect(bx, vy - 9, tw + 8, 18);
       ctx.fillStyle = T.bg; ctx.textAlign = 'left'; ctx.fillText(hTxt, bx + 4, vy);
+      }
     }
     py += h;
   });
