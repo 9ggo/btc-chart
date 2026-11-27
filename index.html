@@ -77,6 +77,7 @@ footer.folded{display:none}
   <label>봉 개수 <select id="n"></select></label>
   <span id="durLbl" title="지금 화면에 보이는 기간" style="font-size:12px;opacity:.75;min-width:44px;font-variant-numeric:tabular-nums">≈ 15시간</span>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
+  <label title="추정 청산을 가격 앞뒤로 얼마나 퍼뜨려 그릴지 (실제 레버리지·진입가가 제각각이라서)">청산 퍼짐 <select id="spread"><option value="0">점</option><option value="0.05">±0.05%</option><option value="0.1">±0.1%</option><option value="0.2">±0.2%</option></select></label>
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="0.5" value="0" style="width:64px">M</label>
   <button id="reset" type="button">Reset</button>
@@ -651,14 +652,27 @@ function render(){
   const LB = Math.max(B, 10);   // 청산 추정치는 $10 단위로 쌓이므로 그보다 잘게 나누면 한 칸씩 비어 보임
   if (ST.liq && liqReady){
     const B = LB;
+    // 퍼짐: 추정 청산 하나를 가격의 ±SPR 범위에 삼각형 모양으로 나눠 담음 (실제 레버리지·진입가가 제각각인 걸 반영)
+    const SPR = (ST.spread || 0) / 100;
+    const spreadK = (p, f) => {
+      const w = p * SPR;
+      if (w < B * 0.75){ f(Math.floor(p / B), 1); return; }
+      const k0 = Math.floor((p - w) / B), k1 = Math.floor((p + w) / B), ws = [];
+      let sum = 0;
+      for (let k = k0; k <= k1; k++){ const c = (k + .5) * B, v = Math.max(0, 1 - Math.abs(c - p) / w); ws.push(v); sum += v; }
+      if (!sum){ f(Math.floor(p / B), 1); return; }
+      for (let k = k0; k <= k1; k++){ const v = ws[k - k0]; if (v > 0) f(k, v / sum); }
+    };
     const act = new Map(), done = [];
     for (const e of liqE.values()){
-      if (e.p < lo || e.p > hi) continue;
+      if (e.p < lo - e.p * SPR || e.p > hi + e.p * SPR) continue;
       if (e.end){ if (e.end > t0) done.push(e); continue; }
-      const key = e.side + Math.floor(e.p / B);
-      let o = act.get(key);
-      if (!o){ o = { k:Math.floor(e.p / B), side:e.side, u:0, es:[] }; act.set(key, o); }
-      o.u += e.usd; o.es.push(e);
+      spreadK(e.p, (k, f) => {
+        const key = e.side + k;
+        let o = act.get(key);
+        if (!o){ o = { k, side:e.side, u:0, es:[] }; act.set(key, o); }
+        o.u += e.usd * f; o.es.push({ t:e.t, usd:e.usd * f });
+      });
     }
     const arr = [...act.values()];
     const mx = Math.max(0, ...arr.map(o => o.u));
@@ -667,9 +681,10 @@ function render(){
       // 소진된 매물: 같은 가격 구간·같은 소진 시각끼리 묶어 한 번만 그림 (겹쳐서 진해지는 것 방지)
       const dg = new Map();
       for (const e of done){
-        const k = Math.floor(e.p / B), key = e.side + k + '|' + Math.floor(e.end / 60000);
-        const g = dg.get(key);
-        if (g){ g.t = Math.min(g.t, e.t); g.u += e.usd; } else dg.set(key, { side:e.side, k, t:e.t, end:e.end, u:e.usd });
+        spreadK(e.p, (k, f) => {
+          const key = e.side + k + '|' + Math.floor(e.end / 60000), g = dg.get(key);
+          if (g){ g.t = Math.min(g.t, e.t); g.u += e.usd * f; } else dg.set(key, { side:e.side, k, t:e.t, end:e.end, u:e.usd * f });
+        });
       }
       const FADE = tStep * ST.n / 3;   // 기본: 보이는 기간의 1/3에 걸쳐 옅어지다 사라짐
       for (const g of dg.values()){
@@ -699,13 +714,14 @@ function render(){
         });
         o.x0 = xT(o.es[0].t);
         const r = (o.u / mx) ** 0.6;
-        if (r > 0.75){ ctx.fillStyle = col(o.side, 1, 1.2); ctx.fillRect(o.x0, y0, cw - o.x0, 1); ctx.fillRect(o.x0, y0 + h - 1, cw - o.x0, 1); }
+        if (r > 0.75 && !SPR){ ctx.fillStyle = col(o.side, 1, 1.2); ctx.fillRect(o.x0, y0, cw - o.x0, 1); ctx.fillRect(o.x0, y0 + h - 1, cw - o.x0, 1); }
       }
       arr.sort((a, b) => b.u - a.u);
       let n = 0;
       for (const o of arr){
         if (n >= 6) break;
         const r = o.u / mx; if (r < 0.15) break;
+        if (SPR){ const nb = d => (act.get(o.side + (o.k + d)) || { u:0 }).u; if (nb(-1) > o.u || nb(1) > o.u || nb(-2) > o.u || nb(2) > o.u) continue; }   // 퍼짐일 땐 봉우리(주변보다 큰 곳)에만 라벨
         const fs = Math.round(9 + 7 * r), ym = y((o.k + .5) * B);
         if (ym < top + fs || ym > bot - fs) continue;
         const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(o.k * B)}-${fp((o.k + 1) * B)}  ${fu(o.u)}`;
@@ -1408,6 +1424,9 @@ function applyLook(){
   $('swL').style.background = heat('L', 1, 1); $('swS').style.background = heat('S', 1, 1);
   dirty = true;
 }
+ST.spread = ['0','0.05','0.1','0.2'].includes(store.get('btcSpread')) ? +store.get('btcSpread') : 0.1;   // 기본 ±0.1%
+$('spread').value = String(ST.spread);
+$('spread').addEventListener('change', e => { ST.spread = +e.target.value; store.set('btcSpread', e.target.value); dirty = true; });
 ST.theme = store.get('btcTheme') === 'dark' ? 'dark' : 'light';   // 기본은 라이트 모드
 applyLook();
 // 하단 설명 접기/펼치기 (기억)
