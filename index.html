@@ -678,7 +678,6 @@ function render(){
         boxes.push([x - tw / 2 - 3, x + tw / 2 + 3, ty - 7, ty + 7]);
         L.push(() => {
           ctx.font = '700 10px sans-serif'; ctx.textAlign = 'center';
-          ctx.fillStyle = T.lbg; ctx.fillRect(x - tw / 2 - 3, ty - 7, tw + 6, 14);
           ctx.fillStyle = T.inkS; ctx.fillText(txt, x, ty);
         });
       }
