@@ -576,7 +576,7 @@ function render(){
   viewLo = lo; viewHi = hi; viewSpan = hi - lo; viewPh = ph; viewTop = top; viewPlotW = cw - 56;
   const y = p => top + (hi - p) / (hi - lo) * ph;
   // 자동 구간도 이상적인 값이 지금의 절반 이하·두 배 가까이로 바뀔 때만 교체 (구간 크기가 왔다 갔다 하며 번쩍이는 것 방지)
-  { const ideal = (hi - lo) / 110; if (!autoBucket || ideal > autoBucket * 1.8 || ideal < autoBucket * 0.45) autoBucket = nice(ideal); }
+  { const ideal = (hi - lo) / 110; if (!autoBucket || ideal > autoBucket * 1.5 || ideal < autoBucket * 0.6) autoBucket = nice(ideal); }
   const autoB = autoBucket, B = ST.bucket || autoB;
   { const a = $('autoOpt'), txt = `자동 ($${autoB})`; if (a.textContent !== txt) a.textContent = txt; }
   const dec = B < 1 ? 2 : B % 1 ? 1 : 0;
@@ -648,7 +648,9 @@ function render(){
   }
 
   // 청산 추정 띠: 생긴 시점부터 오른쪽으로 뻗고, 가격이 닿은 부분은 그 시점에서 끊기고 옅어짐
+  const LB = Math.max(B, 10);   // 청산 추정치는 $10 단위로 쌓이므로 그보다 잘게 나누면 한 칸씩 비어 보임
   if (ST.liq && liqReady){
+    const B = LB;
     const act = new Map(), done = [];
     for (const e of liqE.values()){
       if (e.p < lo || e.p > hi) continue;
