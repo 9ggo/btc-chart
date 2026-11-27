@@ -10,6 +10,9 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 body{display:flex;flex-direction:column}
+#toNow{position:absolute;z-index:4;width:34px;height:34px;padding:0;display:grid;place-items:center;border-radius:50%;background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.9}
+#toNow[hidden]{display:none}
+#toNow:hover{opacity:1;background:var(--btn2)}
 .ctxmenu{position:absolute;z-index:5;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 .ctxmenu[hidden]{display:none}
 .ctxmenu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 12px;white-space:nowrap}
@@ -66,7 +69,7 @@ footer.folded #status{margin-left:auto}
     <button id="reset" type="button">설정 초기화</button>
   </div>
 </header>
-<div id="wrap"><canvas id="cv"></canvas><div id="ctx" class="ctxmenu" hidden><button id="ctxReset" type="button">차트 기본값으로</button></div></div>
+<div id="wrap"><canvas id="cv"></canvas><button id="toNow" type="button" aria-label="현재로" title="현재로" hidden><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 3l7 5-7 5z" fill="currentColor"/><rect x="12" y="3" width="2" height="10" fill="currentColor"/></svg></button><div id="ctx" class="ctxmenu" hidden><button id="ctxReset" type="button">차트 기본값으로</button></div></div>
 <footer id="foot">
   <button id="legendBtn" type="button">설명 접기</button>
   <div class="legend">
@@ -294,10 +297,14 @@ function onKline(k){
   sweepLiq(c.c, c.c);
   dirty = true;
 }
+const forceSeen = new Set();
 function onForce(o){
   forceAll++;
   if (o.s !== SYM) { dirty = true; return; }
   const p = +o.ap || +o.p, q = +o.z || +o.q;
+  const dupKey = o.T + '|' + o.S + '|' + (o.ap || o.p) + '|' + (o.z || o.q);
+  if (forceSeen.has(dupKey)) return;   // 같은 청산이 두 번 오면 한 번만
+  forceSeen.add(dupKey); if (forceSeen.size > 2000) forceSeen.delete(forceSeen.values().next().value);
   forces.push({ t:o.T, p, usd:p * q, long:o.S === 'SELL' });
   if (forces.length > 400) forces.shift();
   dirty = true;
@@ -434,6 +441,9 @@ function render(){
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
   const AX = 22;   // 하단 시간축 높이
   const cw = W - panelW, top = 8, bot = H - AX - 4, ph = bot - top;
+  { const b = $('toNow'), show = ST.xOff >= 0.5;   // 최신 캔들이 화면 밖이면 '현재로' 버튼
+    if (b.hidden === show) b.hidden = !show;
+    if (show){ b.style.right = (panelW + 12) + 'px'; b.style.bottom = (AX + 12) + 'px'; } }
   { const need = ST.n + Math.ceil(ST.xOff) + 50; if (need > candles.length) ensureHistory(need + 1500); }
   ST.xOff = Math.max(0, Math.min(ST.xOff, candles.length - 4));
   const whole = Math.floor(ST.xOff), frac = ST.xOff - whole;   // 소수 부분만큼 부드럽게 밀어서 그림
@@ -600,18 +610,23 @@ function render(){
   // 실제 청산 체결 마커
   if (ST.force && vis.length){
     const step = vis.length > 1 ? vis[1].t - vis[0].t : 60000;
-    // 같은 캔들·같은 방향·같은 가격 구간의 청산은 하나로 합쳐서 그림 (삼각형이 탑처럼 쌓여 차트를 가리지 않게)
-    const grp = new Map();
+    // 같은 캔들·같은 방향·화면상 같은 높이의 청산은 하나로 합쳐서 그림 (삼각형이 탑처럼 쌓여 차트를 가리지 않게)
+    const items = [];
     for (const f of forces){
       if (f.t < vis[0].t || f.t >= vis[vis.length - 1].t + step || f.p < lo || f.p > hi) continue;
-      const i = Math.min(vis.length - 1, Math.floor((f.t - vis[0].t) / step));
-      const key = i + (f.long ? 'L' : 'S') + Math.floor(f.p / B);
-      const g = grp.get(key);
-      if (g){ g.pu += f.p * f.usd; g.usd += f.usd; } else grp.set(key, { i, long:f.long, pu:f.p * f.usd, usd:f.usd });
+      items.push({ i:Math.min(vis.length - 1, Math.floor((f.t - vis[0].t) / step)), long:f.long, p:f.p, usd:f.usd, yy:y(f.p) });
+    }
+    // 같은 캔들·같은 방향에서 화면상 16px 안에 붙어 있는 것끼리 묶음 (경계에서 둘로 갈라지지 않게 높이순으로 이어 붙임)
+    items.sort((a, b) => a.i - b.i || (a.long === b.long ? 0 : a.long ? -1 : 1) || a.yy - b.yy);
+    const grp = [];
+    for (const it of items){
+      const g = grp[grp.length - 1];
+      if (g && g.i === it.i && g.long === it.long && it.yy - g.yLast < 16){ g.pu += it.p * it.usd; g.usd += it.usd; g.yLast = it.yy; }
+      else grp.push({ i:it.i, long:it.long, pu:it.p * it.usd, usd:it.usd, yLast:it.yy });
     }
     // 크기는 캔들 폭에 비례: 캔들 폭 20px일 때 기본 크기, 확대하면 최대 2배까지 커지고 축소하면 일찍부터 작아짐
     const k = Math.max(0.25, Math.min(2, slot / 20));
-    const list = [...grp.values()].sort((a, b) => a.usd - b.usd);   // 큰 것이 위에 오도록 작은 것부터
+    const list = grp.sort((a, b) => a.usd - b.usd);   // 큰 것이 위에 오도록 작은 것부터
     for (const g of list){
       const x = xOf(g.i), yy = y(g.pu / g.usd);
       const s = Math.max(2.5, Math.min(18, Math.max(7, Math.sqrt(g.usd / 3e3))) * k);
@@ -1007,6 +1022,7 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => { if (drag && drag.moved) clearTimeout(pressTimer); });
 cv.addEventListener('pointerup', () => clearTimeout(pressTimer));
 cv.addEventListener('pointercancel', () => clearTimeout(pressTimer));
+$('toNow').addEventListener('click', () => resetView());
 $('ctxReset').addEventListener('click', () => { chartDefaults(); hideMenu(); });
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMenu(); });
