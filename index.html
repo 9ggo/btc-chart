@@ -69,7 +69,7 @@ footer.folded #status{margin-left:auto}
     <button id="reset" type="button">설정 초기화</button>
   </div>
 </header>
-<div id="wrap"><canvas id="cv"></canvas><button id="toNow" type="button" aria-label="현재로" title="현재로" hidden><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 3l7 5-7 5z" fill="currentColor"/><rect x="12" y="3" width="2" height="10" fill="currentColor"/></svg></button><div id="ctx" class="ctxmenu" hidden><button id="ctxReset" type="button">차트 기본값으로</button></div></div>
+<div id="wrap"><canvas id="cv"></canvas><button id="toNow" type="button" hidden></button></div>
 <footer id="foot">
   <button id="legendBtn" type="button">설명 접기</button>
   <div class="legend">
@@ -92,7 +92,6 @@ footer.folded #status{margin-left:auto}
       <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다.</dd></div>
       <div class="row"><dt>두 손가락 (터치)</dt><dd>가로로 벌리면 시간축, 세로로 벌리면 가격축을 확대·축소합니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</dd></div>
-      <div class="row"><dt>우클릭 · 길게 누르기</dt><dd>봉 개수·구간·범위·최소 규모·확대 상태를 기본값으로 되돌리는 메뉴가 나옵니다.</dd></div>
       <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드를 뺀 모든 설정을 기본값으로 되돌립니다.</dd></div>
     </dl></section>
   </div>
@@ -441,7 +440,15 @@ function render(){
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
   const AX = 34;   // 하단 시간축 높이 (연도 줄 + 날짜·시각 줄)
   const cw = W - panelW, top = 8, bot = H - AX - 4, ph = bot - top;
-  { const b = $('toNow'), show = ST.xOff >= 0.5;   // 최신 캔들이 화면 밖이면 '현재로' 버튼
+  { const b = $('toNow');
+    const isDefault = !ST.view && !ST.span && !ST.bucket && !ST.range && !ST.minQty && ST.n === Math.round(900 / IV_MIN[ST.interval]);
+    const mode = ST.xOff >= 0.5 ? 'now' : isDefault ? '' : 'reset';
+    const show = !!mode;
+    if (b.dataset.mode !== mode){
+      b.dataset.mode = mode;
+      if (mode === 'now'){ b.innerHTML = ICON_NOW; b.title = '현재로'; b.setAttribute('aria-label', '현재로'); }
+      else if (mode === 'reset'){ b.innerHTML = ICON_RESET; b.title = '차트 기본값으로'; b.setAttribute('aria-label', '차트 기본값으로'); }
+    }
     if (b.hidden === show) b.hidden = !show;
     if (show){ b.style.right = (panelW + 12) + 'px'; b.style.bottom = (AX + 12) + 'px'; } }
   { const need = ST.n + Math.ceil(ST.xOff) + 50; if (need > candles.length) ensureHistory(need + 1500); }
@@ -1015,36 +1022,10 @@ function chartDefaults(){
   ST.view = null; ST.span = null; ST.xOff = 0; autoHalf = 0; autoBucket = 0;
   depthCache = null; redraw();
 }
-const menu = $('ctx');
-const hideMenu = () => { menu.hidden = true; };
-function showMenu(cx, cy){
-  const r = $('wrap').getBoundingClientRect();
-  menu.hidden = false;
-  const mw = menu.offsetWidth || 220, mh = menu.offsetHeight || 40;
-  menu.style.left = Math.max(4, Math.min(cx - r.left, r.width - mw - 4)) + 'px';
-  menu.style.top = Math.max(4, Math.min(cy - r.top, r.height - mh - 4)) + 'px';
-}
-cv.addEventListener('contextmenu', e => { e.preventDefault(); if (Date.now() - lastPress > 800) showMenu(e.clientX, e.clientY); });
-// 터치(아이패드): 길게 누르면(0.55초) 같은 메뉴
-let pressTimer = 0, lastPress = 0;
-cv.addEventListener('pointerdown', e => {
-  clearTimeout(pressTimer);
-  if (e.pointerType === 'mouse' || ptrs.size > 1) return;
-  const sx = e.clientX, sy = e.clientY;
-  pressTimer = setTimeout(() => {
-    if (ptrs.size !== 1 || (drag && drag.moved)) return;
-    drag = null; lastTap.t = 0; lastPress = Date.now();
-    showMenu(sx, sy);
-  }, 550);
-});
-cv.addEventListener('pointermove', e => { if (drag && drag.moved) clearTimeout(pressTimer); });
-cv.addEventListener('pointerup', () => clearTimeout(pressTimer));
-cv.addEventListener('pointercancel', () => clearTimeout(pressTimer));
-$('toNow').addEventListener('click', () => resetView());
-$('ctxReset').addEventListener('click', () => { chartDefaults(); hideMenu(); });
-document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMenu(); });
-cv.addEventListener('wheel', hideMenu);
+// 오른쪽 아래 버튼: 과거를 보고 있으면 ▶| (현재로), 최신 화면인데 기본값과 다르면 ↺ (차트 기본값으로)
+const ICON_NOW = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 3l7 5-7 5z" fill="currentColor"/><rect x="12" y="3" width="2" height="10" fill="currentColor"/></svg>';
+const ICON_RESET = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 3a5 5 0 1 1-4.6 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.6 2.6l1.9 3.9 3.8-1.9z" fill="currentColor"/></svg>';
+$('toNow').addEventListener('click', () => { if ($('toNow').dataset.mode === 'now') resetView(); else chartDefaults(); });
 $('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
 // 설정 초기화: 모든 선택을 기본값으로
 $('reset').addEventListener('click', () => {
