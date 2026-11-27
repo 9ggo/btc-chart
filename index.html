@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -82,7 +82,7 @@ const SAPI = 'https://api.binance.com';
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
-const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
 let viewSpan = 1, viewPh = 1, viewSlot = 1, viewTop = 8, viewPlotW = 1, viewLo = 0, viewHi = 1;
 const THEMES = {
@@ -589,8 +589,16 @@ function render(){
       else { ctx.moveTo(x - s, yy + s); ctx.lineTo(x + s, yy + s); ctx.lineTo(x, yy - s * .4); }
       ctx.closePath();
       ctx.fillStyle = f.long ? '#ffb000' : '#d17bff'; ctx.fill();
-      ctx.strokeStyle = T.mark; ctx.lineWidth = 1; ctx.stroke();
-      if (f.usd >= 1e5){ ctx.fillStyle = T.mark; ctx.fillText(fu(f.usd), x, f.long ? yy - s - 7 : yy + s + 8); }
+      ctx.strokeStyle = T.mark; ctx.lineWidth = 0.5; ctx.stroke(); ctx.lineWidth = 1;
+      if (f.usd >= 1e5){   // 금액 글자는 다른 삼각형들보다 앞에 오도록 맨 마지막에 그림
+        const ty = f.long ? yy - s - 7 : yy + s + 8, txt = fu(f.usd);
+        L.push(() => {
+          ctx.font = '700 10px sans-serif'; ctx.textAlign = 'center';
+          const tw = ctx.measureText(txt).width;
+          ctx.fillStyle = T.lbg; ctx.fillRect(x - tw / 2 - 3, ty - 7, tw + 6, 14);
+          ctx.fillStyle = T.inkS; ctx.fillText(txt, x, ty);
+        });
+      }
     }
     // 접속 후 누적 요약 (켜고 끄면 바로 보이도록)
     const hr = now0 - 3600000; let lu = 0, su = 0, n = 0;
@@ -905,7 +913,7 @@ function applyLook(){
   $('swL').style.background = heat('L', 1, 1); $('swS').style.background = heat('S', 1, 1);
   dirty = true;
 }
-ST.theme = store.get('btcTheme') === 'light' ? 'light' : 'dark';
+ST.theme = store.get('btcTheme') === 'dark' ? 'dark' : 'light';   // 기본은 라이트 모드
 applyLook();
 // 하단 설명 접기/펼치기 (기억)
 function setFold(f){ $('foot').classList.toggle('folded', f); $('legendBtn').textContent = f ? '설명 보기' : '설명 접기'; dirty = true; }
