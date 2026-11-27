@@ -73,7 +73,7 @@ footer.folded{display:none}
 <body>
 <header>
   <b title="바이낸스 USDⓈ-M 선물 BTCUSDT 무기한 계약">BINANCE:BTCUSDT.P</b>
-  <label>봉 <select id="interval"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option><option>1h</option><option>4h</option></select></label>
+  <label>봉 <select id="interval"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option><option>1h</option><option>2h</option><option>4h</option><option>1d</option><option>1w</option><option value="1M">1M (월)</option><option value="1y">1y (년)</option></select></label>
   <label>봉 개수 <select id="n"></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
@@ -145,7 +145,7 @@ let paneHits = [];
 let hover = null;
 let priceTag = null, priceBox = null, copiedAt = 0, freezeY = null;   // 가격표의 + 버튼(복사) / 가격표 전체 / 복사 시각 / 가격표 위에 있는 동안 고정할 세로 범위   // 커서(또는 탭) 위치 {x, y}: 그 시점의 시가·고가·저가·종가와 지표 값 표시      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
 let oiHist = [];        // [{t, v}] 미결제약정(BTC)
-const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h' };
+const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '2h':'2h', '4h':'4h', '1d':'1d', '1w':'1d', '1M':'1d', '1y':'1d' };
 async function loadOI(iv){
   try {
     const r = await fetch(`${FAPI}/futures/data/openInterestHist?symbol=${SYM}&period=${OI_PERIOD[iv] || '5m'}&limit=500`);
@@ -318,9 +318,21 @@ function setErr(m){ lastErr = m; dirty = true; }
 
 /* ---------------- 캔들 ---------------- */
 async function fetchKlines(iv){
-  const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${iv}&limit=1500`);
+  const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${iv === '1y' ? '1M' : iv}&limit=1500`);
   if (!r.ok) throw new Error('캔들 HTTP ' + r.status);
-  return (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9], qv:+k[7] || +k[5] * +k[4], tq:+k[10] || +k[9] * +k[4] }));
+  const a = (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9], qv:+k[7] || +k[5] * +k[4], tq:+k[10] || +k[9] * +k[4] }));
+  if (iv === '1y'){ monthStore = a; return toYears(a); }   // 바이낸스에 1년봉이 없어서 월봉을 해마다 합침
+  return a;
+}
+let monthStore = [];
+function toYears(months){
+  const out = [];
+  for (const m of months){
+    const y = new Date(m.t).getUTCFullYear(), last = out[out.length - 1];
+    if (last && last.y === y){ last.h = Math.max(last.h, m.h); last.l = Math.min(last.l, m.l); last.c = m.c; last.v += m.v; last.tb += m.tb; last.qv += m.qv; last.tq += m.tq; }
+    else out.push({ y, t:Date.UTC(y, 0, 1), o:m.o, h:m.h, l:m.l, c:m.c, v:m.v, tb:m.tb, qv:m.qv, tq:m.tq });
+  }
+  return out;
 }
 let lastKlineMsg = 0, marketOpen = false, forceAll = 0;
 async function priceFallback(){
@@ -339,16 +351,25 @@ function onTrade(d){
   const p = +d.p, t = d.T, last = candles[candles.length - 1];
   if (!p || !last || loadingIv) return;
   const iv = IV_MIN[ST.interval] * 60000;
-  if (t >= last.t + iv){   // 새 봉 시작 (거래량은 곧 오는 캔들 데이터가 정확한 값으로 채움)
+  const fixed = ST.interval !== '1M' && ST.interval !== '1y';   // 월·년봉은 길이가 달라서 새 봉은 캔들 데이터로만 만듦
+  if (fixed && t >= last.t + iv){   // 새 봉 시작 (거래량은 곧 오는 캔들 데이터가 정확한 값으로 채움)
     const nt = last.t + Math.floor((t - last.t) / iv) * iv;
     candles.push({ t:nt, o:p, h:p, l:p, c:p, v:0, tb:0, qv:0, tq:0 });
   } else if (t >= last.t){ last.c = p; if (p > last.h) last.h = p; if (p < last.l) last.l = p; }
   lastPrice = p; sweepLiq(p, p); dirty = true;
 }
 function onKline(k){
-  if (k.i && k.i !== ST.interval) return;   // 바꾸기 전 봉의 늦게 온 데이터는 무시
+  const want = ST.interval === '1y' ? '1M' : ST.interval;
+  if (k.i && k.i !== want) return;   // 바꾸기 전 봉의 늦게 온 데이터는 무시
   lastKlineMsg = Date.now();
   const c = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, tb:+k.V, qv:+k.q || +k.v * +k.c, tq:+k.Q || +k.V * +k.c };
+  if (ST.interval === '1y'){   // 월봉을 받아 올해 연봉을 다시 계산
+    const lm = monthStore[monthStore.length - 1];
+    if (lm && lm.t === c.t) monthStore[monthStore.length - 1] = c; else if (!lm || c.t > lm.t) monthStore.push(c);
+    const ys = toYears(monthStore.slice(-14)), cy = ys[ys.length - 1], ly = candles[candles.length - 1];
+    if (ly && ly.t === cy.t) candles[candles.length - 1] = cy; else candles.push(cy);
+    lastPrice = c.c; sweepLiq(c.c, c.c); dirty = true; return;
+  }
   const last = candles[candles.length - 1];
   if (last && last.t === c.t) candles[candles.length - 1] = c;
   else if (!last || c.t > last.t){ candles.push(c); if (candles.length > MAXN + 2000) candles.shift(); }
@@ -1103,7 +1124,7 @@ let klineWS = null;
 function startKlineWS(){
   if (klineWS) klineWS.close();
   marketOpen = false;
-  klineWS = openWS(`wss://fstream.binance.com/market/stream?streams=${sym}@kline_${ST.interval}/${sym}@aggTrade/!forceOrder@arr`, m => {
+  klineWS = openWS(`wss://fstream.binance.com/market/stream?streams=${sym}@kline_${ST.interval === '1y' ? '1M' : ST.interval}/${sym}@aggTrade/!forceOrder@arr`, m => {
     const d = m.data; if (!d) return;
     if (d.e === 'aggTrade') onTrade(d); else if (d.e === 'kline') onKline(d.k); else if (d.e === 'forceOrder') onForce(d.o);
   }, () => { marketOpen = true; dirty = true; }, () => { marketOpen = false; dirty = true; });
@@ -1114,7 +1135,7 @@ let loadingIv = null, ivReq = 0;
 const MAXN = 72000;   // 1500 × 48 (5분봉 약 250일)
 let loadingOlder = false, noMoreOlder = false;
 async function ensureHistory(need){
-  if (loadingOlder || noMoreOlder || !candles.length || candles.length >= need || candles.length >= MAXN + 1500) return;
+  if (loadingOlder || noMoreOlder || ST.interval === '1y' || !candles.length || candles.length >= need || candles.length >= MAXN + 1500) return;   // 1y는 처음에 전부 받음
   loadingOlder = true; dirty = true;
   const iv = ST.interval, req = ivReq;
   try {
@@ -1133,7 +1154,7 @@ async function changeInterval(iv){
   try {
     const data = await fetchKlines(iv);
     if (req !== ivReq) return;                  // 그사이 다른 봉을 골랐으면 버림
-    ST.interval = iv; noMoreOlder = false; setN(ST.dur / IV_MIN[iv], true);
+    ST.interval = iv; noMoreOlder = false; setN(Math.max(ST.dur / IV_MIN[iv], LONG_MIN[iv] || 0), true);   // 일봉 이상은 기간을 맞추면 봉이 너무 적어서 최소 개수 보장
     ST.xOff = 0; ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0;
     candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
     lastErr = ''; oiHist = []; loadOI(iv);
@@ -1214,7 +1235,8 @@ new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0; } dirty = true; });
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
-const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '4h':240 };
+const LONG_MIN = { '1d':90, '1w':52, '1M':36, '1y':8 };
+const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '2h':120, '4h':240, '1d':1440, '1w':10080, '1M':43830, '1y':525960 };   // 1M·1y는 평균 길이
 const N_OPTS = [15, 30, 60, 90, 120, 180, 240, 300, 500, 900, 1500, 3000, 9000, 72000];
 let nHtml = '';
 function setN(n, keepDur){
