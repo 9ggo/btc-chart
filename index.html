@@ -98,6 +98,7 @@ footer.folded{display:none}
     </dl></section>
     <section><h4>조작 방법</h4><dl>
       <div class="row"><dt>커서 올리기 · 탭</dt><dd>그 시점 봉의 시가·고가·저가·종가와 각 지표 값, 커서 높이의 가격이 표시됩니다.</dd></div>
+      <div class="row"><dt>가격표 클릭</dt><dd>십자선 오른쪽 끝의 가격표를 누르면 그 가격이 복사됩니다.</dd></div>
       <div class="row"><dt>휠</dt><dd>현재가가 가운데 고정된 상태에서는 커서 위치를 기준으로 시간축을 확대·축소하고 현재가는 가운데에 그대로 둡니다. 드래그로 옮긴 뒤에는 커서 위치를 기준으로 확대·축소합니다.</dd></div>
       <div class="row"><dt>Ctrl + 휠</dt><dd>가격축만 확대·축소합니다.</dd></div>
       <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다.</dd></div>
@@ -127,7 +128,8 @@ try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
   if (Array.isArray(sv) && sv.length === 4 && PANE_DEF().every(d => sv.some(p => p.id === d.id))) panes = sv.map(p => ({ id:p.id, open:!!p.open, h:Math.max(30, Math.min(400, +p.h || 56)) })); } catch (e){}
 const savePanes = () => { try { localStorage.setItem('btcPanes', JSON.stringify(panes)); } catch (e){} };
 let paneHits = [];
-let hover = null;   // 커서(또는 탭) 위치 {x, y}: 그 시점의 시가·고가·저가·종가와 지표 값 표시      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
+let hover = null;
+let priceTag = null, copiedAt = 0;   // 십자선 오른쪽 가격표 위치(클릭하면 그 가격 복사)   // 커서(또는 탭) 위치 {x, y}: 그 시점의 시가·고가·저가·종가와 지표 값 표시      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
 let oiHist = [];        // [{t, v}] 미결제약정(BTC)
 const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h' };
 async function loadOI(iv){
@@ -879,7 +881,7 @@ function render(){
   ctx.fillStyle = T.priceTxt; ctx.fillText(pt, px, yp);
 
   // ---------- 하단 지표 패널 ----------
-  paneHits = [];
+  paneHits = []; priceTag = null;
   ctx.fillStyle = T.bg; ctx.fillRect(0, bot, W, axTop - bot);
   const nf = v => Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e4 ? Math.round(v).toLocaleString() : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
   let py = bot + 4;
@@ -1037,9 +1039,11 @@ function render(){
     ctx.restore();
     ctx.textBaseline = 'middle';
     if (inMain){   // 커서 높이의 가격
-      const pv = hi - (hover.y - top) / ph * (hi - lo), txt = pv.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
+      const pv = hi - (hover.y - top) / ph * (hi - lo);
+      const txt = Date.now() - copiedAt < 1000 ? '복사됨 ✓' : pv.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
       ctx.font = '700 11px sans-serif'; ctx.textAlign = 'right'; const tw = ctx.measureText(txt).width;
       ctx.fillStyle = T.inkS; ctx.fillRect(cw - tw - 10, hover.y - 9, tw + 8, 18); ctx.fillStyle = T.bg; ctx.fillText(txt, cw - 6, hover.y);
+      priceTag = { x0:cw - tw - 12, x1:cw, y0:hover.y - 10, y1:hover.y + 10, val:pv.toFixed(1) };
     }
     { // 시간축의 시각
       const d = new Date(c.t), txt = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -1208,7 +1212,14 @@ let drag = null, pinch = null, lastTap = { t:0, x:0, y:0 };
 let paneDrag = null;
 const paneAt = p => paneHits.find(h => p.x >= h.x0 && p.x <= h.x1 && p.y >= h.y0 && p.y <= h.y1);
 cv.addEventListener('pointerdown', e => {
-  const pp = posOf(e), hp = ptrs.size === 0 && paneAt(pp);
+  const pp = posOf(e);
+  // 십자선 오른쪽 가격표를 누르면 그 가격(쉼표 없는 숫자)을 복사
+  if (ptrs.size === 0 && priceTag && pp.x >= priceTag.x0 && pp.x <= priceTag.x1 && pp.y >= priceTag.y0 && pp.y <= priceTag.y1){
+    const v = priceTag.val;
+    (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => { copiedAt = Date.now(); redraw(); setTimeout(redraw, 1050); }).catch(() => {});
+    return;
+  }
+  const hp = ptrs.size === 0 && paneAt(pp);
   if (hp){   // 지표 제목줄: ▲▼ = 순서 변경, 제목줄 클릭 = 접기/펼치기, 위아래로 끌기 = 높이 조절
     try { cv.setPointerCapture(e.pointerId); } catch (_){}
     const i = panes.findIndex(p => p.id === hp.id);
@@ -1236,7 +1247,8 @@ cv.addEventListener('pointermove', e => {
   }
   if (e.pointerType === 'mouse'){ const p = posOf(e); hover = p.x <= viewPlotW + 56 ? p : null; redraw(); }
   if (!ptrs.size && e.pointerType === 'mouse'){   // 마우스 모양: 제목줄은 위아래 화살표, 버튼은 손가락
-    const h = paneAt(posOf(e)); const c = h ? (h.act === 'head' ? 'ns-resize' : 'pointer') : 'grab';
+    const q = posOf(e), h = paneAt(q), onTag = priceTag && q.x >= priceTag.x0 && q.x <= priceTag.x1 && q.y >= priceTag.y0 && q.y <= priceTag.y1;
+    const c = onTag ? 'copy' : h ? (h.act === 'head' ? 'ns-resize' : 'pointer') : 'grab';
     if (cv.style.cursor !== c) cv.style.cursor = c;
   }
   if (!ptrs.has(e.pointerId)) return;
