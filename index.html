@@ -300,13 +300,25 @@ function onForce(o){
   forceAll++;
   if (o.s !== SYM) { dirty = true; return; }
   const p = +o.ap || +o.p, q = +o.z || +o.q;
-  const dupKey = o.T + '|' + o.S + '|' + (o.ap || o.p) + '|' + (o.z || o.q);
+  const dupKey = 's|' + o.T + '|' + (o.S === 'SELL') + '|' + p + '|' + p * q;
   if (forceSeen.has(dupKey)) return;   // 같은 청산이 두 번 오면 한 번만
   forceSeen.add(dupKey); if (forceSeen.size > 2000) forceSeen.delete(forceSeen.values().next().value);
   forces.push({ t:o.T, p, usd:p * q, long:o.S === 'SELL' });
-  if (forces.length > 400) forces.shift();
-  dirty = true;
+  if (forces.length > 2000) forces.shift();
+  saveForces(); dirty = true;
 }
+// 실제 청산 기록은 바이낸스에서 다시 받아올 수 없으므로 이 브라우저에 저장 (새로고침해도 유지, 최근 3일)
+let saveTimer = 0;
+function saveForces(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { const cut = Date.now() - 3 * 86400000; localStorage.setItem('btcForces', JSON.stringify(forces.filter(f => f.t > cut))); } catch (e){}
+  }, 2000);
+}
+try {
+  const saved = JSON.parse(localStorage.getItem('btcForces') || '[]'), cut = Date.now() - 3 * 86400000;
+  for (const f of saved) if (f && f.t > cut && f.p > 0 && f.usd > 0){ forces.push(f); forceSeen.add('s|' + f.t + '|' + f.long + '|' + f.p + '|' + f.usd); }
+} catch (e){}
 
 /* ---------------- 청산 매물대 추정 모델 ----------------
    미결제약정(OI)이 늘어난 구간 = 새 포지션 진입.
