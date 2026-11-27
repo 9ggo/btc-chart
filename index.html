@@ -943,9 +943,9 @@ function render(){
       if (pts.length > 1){
         for (const [lv, col, above] of [[70, 'rgba(38,166,154,.45)', true], [30, 'rgba(239,83,80,.45)', false]]){
           ctx.save(); ctx.beginPath();
-          // 기준선에 딱 붙는 1px 틈이 안 생기도록 경계를 1px 겹쳐서 채움
-          const yl = Y(lv), yc = above ? Math.ceil(yl) + 1 : Math.floor(yl) - 1;
-          if (above) ctx.rect(0, top2, cw, Math.ceil(yl) + 1 - top2); else ctx.rect(0, Math.floor(yl) - 1, cw, bot2 - Math.floor(yl) + 1);
+          // 정확히 70 초과 / 30 미만 부분만 채움 (기준선 높이에서 딱 잘라냄)
+          const yl = Y(lv), yc = yl;
+          if (above) ctx.rect(0, top2, cw, yl - top2); else ctx.rect(0, yl, cw, bot2 - yl);
           ctx.clip(); ctx.beginPath(); ctx.moveTo(pts[0][0], yc);
           for (const [x, v] of pts) ctx.lineTo(x, Y(v));
           ctx.lineTo(pts[pts.length - 1][0], yc); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
