@@ -486,6 +486,16 @@ const PERSIST = 120000, GHOST_MS = 60000, DEPTH_MS = 500;
 let depthCache = null;
 const walls = new Map(), ghosts = [];
 let trackStart = 0;
+// 가격 한 칸(호가 단위)별 유지 시간: 구간 크기와 상관없이 기록 → 줌인·아웃해도 시간이 초기화되지 않음
+const lvl = new Map();
+let lvlGen = 0;
+function lvlSeen(tg, p, q, o, now){
+  const key = tg + p;
+  let L = lvl.get(key);
+  if (!L || q < 0.5 * L.pk){ L = { s:now, pk:q, p, g:lvlGen }; lvl.set(key, L); }
+  else { if (q > L.pk) L.pk = q; L.g = lvlGen; }
+  if (q > o.lq){ o.lq = q; o.ls = L.s; }
+}
 const fdur = ms => { const s = Math.floor(ms / 1000); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's' : Math.floor(s / 3600) + 'h' + String(Math.floor(s / 60) % 60).padStart(2, '0') + 'm'; };
 const fage = o => (o.fromStart ? '≥' : '') + fdur(o.age || 0);
 function addGhost(w, B, P, now){
@@ -503,7 +513,8 @@ function trackWalls(allRows, B, lo, hi, P, now, mxAll){
     let w = walls.get(key);
     if (!w || o.tot < 0.5 * w.peak){
       if (w && w.big) addGhost(w, B, P, now);
-      w = { since:now, peak:o.tot, k:o.k, side:o.side, big:false };
+      // 처음 보는 구간(줌으로 구간 크기가 바뀐 경우 포함)은 그 안의 가장 큰 호가가 버틴 시간부터 이어서 셈
+      w = { since:w ? now : Math.min(now, o.ls || now), peak:o.tot, k:o.k, side:o.side, big:false };
       walls.set(key, w);
     } else if (o.tot > w.peak) w.peak = o.tot;
     if (o.tot >= 0.4 * mxAll) w.big = true;
@@ -825,11 +836,13 @@ function render(){
   const agg = (book, fb, fa) => {
     if (!book.ready) return;
     book.uncross();
-    for (const [p, [q]] of book.bids){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0 }; o[fb] += q; bk.set(k, o); }
-    for (const [p, [q]] of book.asks){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0 }; o[fa] += q; bk.set(k, o); }
+    for (const [p, [q]] of book.bids){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fb] += q; bk.set(k, o); lvlSeen(fb, p, q, o, now); }
+    for (const [p, [q]] of book.asks){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fa] += q; bk.set(k, o); lvlSeen(fa, p, q, o, now); }
   };
+  lvlGen++;
   if (ST.fut) agg(futBook, 'fb', 'fa');
   if (ST.spot) agg(spotBook, 'sb', 'sa');
+  for (const [key, L] of lvl) if (L.g !== lvlGen && L.p >= lo && L.p <= hi) lvl.delete(key);   // 화면 안에서 사라진 호가는 기록 삭제
   const allRows = [...bk.values()].map(o => { o.bid = o.fb + o.sb; o.ask = o.fa + o.sa; o.tot = o.bid + o.ask; o.side = o.bid >= o.ask ? 'b' : 'a'; return o; })
                                  .filter(o => o.tot > 0);
   if (allRows.length) trackWalls(allRows, B, lo, hi, P, now, Math.max(...allRows.map(o => o.tot)));
