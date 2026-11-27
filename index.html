@@ -80,7 +80,7 @@ footer.folded{display:none}
   <label title="추정 청산을 가격 앞뒤로 얼마나 퍼뜨려 그릴지 (실제 레버리지·진입가가 제각각이라서)">청산 퍼짐 <select id="spread"><option value="0">점</option><option value="0.05">±0.05%</option><option value="0.1">±0.1%</option><option value="0.2">±0.2%</option></select></label>
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="0.5" value="0" style="width:64px">M</label>
-  <label title="호가 매물대에 바이낸스 현물 호가도 합쳐서 보여줌 (선물은 항상 포함)" style="cursor:pointer"><input id="spotOn" type="checkbox" checked style="cursor:pointer;margin:0 3px 0 0;vertical-align:-2px">현물 호가</label>
+  <label title="호가 매물대에 바이낸스 현물 호가도 합쳐서 보여줌 (선물은 항상 포함)" style="cursor:pointer"><input id="spotOn" type="checkbox" style="cursor:pointer;margin:0 3px 0 0;vertical-align:-2px">현물 호가</label>
   <button id="reset" type="button">Reset</button>
   <div class="right">
   <span class="mk" id="mkUsdt" title="업비트 테더(USDT) 원화 가격">USDT ₩—</span>
@@ -135,7 +135,7 @@ const SAPI = 'https://api.binance.com';
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
-const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:false, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
 // 하단 지표 패널: 순서·접힘·높이 (브라우저에 기억)
 const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'oi', open:true, h:47 }, { id:'cvd', open:true, h:47 }];   // 실제 그래프 높이(패널-2px) 75:75:45:45
@@ -1077,7 +1077,10 @@ function render(){
 
     } else if (pn.id === 'oi'){
       // 미결제약정: 바이낸스 OI 기록(봉 간격에 맞춘 주기) + 15초마다 받는 실시간 값
-      const t1 = vis[vis.length - 1].t + tStep, pts = oiHist.filter(o => o.t >= t0 - tStep * 2 && o.t <= t1 + tStep).map(o => [Math.min(cw, (off + (o.t - t0) / tStep) * slot + slot / 2), o.v]);
+      const t1 = vis[vis.length - 1].t + tStep, xEnd = (off + (vis[vis.length - 1].t - t0) / tStep) * slot + slot / 2;
+      // 마지막 봉 가운데(다른 지표의 최신값 위치)보다 오른쪽에 찍히는 실시간 값은 마지막 하나만 그 위치에 둠
+      let pts = oiHist.filter(o => o.t >= t0 - tStep * 2 && o.t <= t1 + tStep).map(o => [(off + (o.t - t0) / tStep) * slot + slot / 2, o.v]);
+      { const tail = pts.filter(p => p[0] > xEnd); pts = pts.filter(p => p[0] <= xEnd); if (tail.length) pts.push([xEnd, tail[tail.length - 1][1]]); pts.forEach(p => { p[0] = Math.min(cw, p[0]); }); }
       if (pts.length){
         lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad; grid();
         line(pts, '#d18b00', 1.5);
@@ -1465,7 +1468,7 @@ function applyLook(){
 ST.spread = ['0','0.05','0.1','0.2'].includes(store.get('btcSpread')) ? +store.get('btcSpread') : 0.05;   // 기본 ±0.05%
 $('spread').value = String(ST.spread);
 $('spread').addEventListener('change', e => { ST.spread = +e.target.value; store.set('btcSpread', e.target.value); dirty = true; });
-ST.spot = store.get('btcSpot') !== '0'; $('spotOn').checked = ST.spot;   // 선물은 항상, 현물은 선택 (기본 켜짐)
+ST.spot = store.get('btcSpot') === '1'; $('spotOn').checked = ST.spot;   // 선물은 항상, 현물은 선택 (기본 꺼짐)
 $('spotOn').addEventListener('change', e => { ST.spot = e.target.checked; store.set('btcSpot', ST.spot ? '1' : '0'); depthCache = null; redraw(); });
 ST.theme = store.get('btcTheme') === 'dark' ? 'dark' : 'light';   // 기본은 라이트 모드
 applyLook();
@@ -1524,7 +1527,7 @@ $('reset').addEventListener('click', () => {
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
   ST.spread = 0.05; $('spread').value = '0.05'; store.set('btcSpread', '0.05');
-  ST.spot = true; $('spotOn').checked = true; store.set('btcSpot', '1');
+  ST.spot = false; $('spotOn').checked = false; store.set('btcSpot', '0');
   ST.view = null; ST.span = null; ST.scaled = false; ST.xOff = 0;
   ST.dur = 900; $('interval').value = '5m';
   if (ST.interval !== '5m') changeInterval('5m'); else setN(180);
