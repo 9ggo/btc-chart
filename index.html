@@ -83,6 +83,10 @@ footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12
       <div class="row"><dt>유지 시간</dt><dd>매물벽이 유지된 시간입니다. ≥ 표시는 차트를 열기 전부터 있던 벽입니다.</dd></div>
       <div class="row"><dt>취소</dt><dd>가격이 닿기 전에 사라진 큰 벽입니다. 스푸핑일 가능성이 있습니다.</dd></div>
       <div class="row"><dt>체결</dt><dd>가격이 닿아 실제로 소화된 큰 벽입니다.</dd></div>
+      <div class="row"><dt>거래량</dt><dd>봉마다 거래된 BTC 수량입니다. 오른 봉은 초록, 내린 봉은 빨강입니다.</dd></div>
+      <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다.</dd></div>
+      <div class="row"><dt>미결제약정 OI</dt><dd>아직 청산되지 않은 선물 포지션 총량(BTC)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
+      <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 거래량입니다. 오르면 매수 우위입니다.</dd></div>
       <div class="row"><dt>호가 데이터 끝</dt><dd>지금까지 확인된 호가 범위의 끝입니다. 가격이 움직일수록 범위가 넓어집니다.</dd></div>
     </dl></section>
     <section><h4>조작 방법</h4><dl>
@@ -91,7 +95,8 @@ footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12
       <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다.</dd></div>
       <div class="row"><dt>두 손가락 (터치)</dt><dd>가로로 벌리면 시간축, 세로로 벌리면 가격축을 확대·축소합니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</dd></div>
-      <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드를 뺀 모든 설정을 기본값으로 되돌립니다.</dd></div>
+      <div class="row"><dt>지표 제목줄</dt><dd>클릭하면 접히거나 펼쳐지고, 위아래로 끌면 높이가 바뀝니다. 오른쪽 ▲ ▼로 순서를 바꿉니다.</dd></div>
+      <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드를 뺀 모든 설정(지표 패널 포함)을 기본값으로 되돌립니다.</dd></div>
     </dl></section>
   </div>
   <div class="foot-r"><button id="legendBtn" type="button">설명 접기</button><span id="status">연결 중…</span></div>
@@ -107,6 +112,27 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 
 const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
+// 하단 지표 패널: 순서·접힘·높이 (브라우저에 기억)
+const PANE_DEF = () => [{ id:'vol', open:true, h:48 }, { id:'rsi', open:true, h:48 }, { id:'oi', open:true, h:48 }, { id:'cvd', open:true, h:48 }];
+const PANE_NAME = { vol:'거래량', rsi:'RSI 14', oi:'미결제약정 OI', cvd:'CVD' };
+let panes = PANE_DEF();
+try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
+  if (Array.isArray(sv) && sv.length === 4 && PANE_DEF().every(d => sv.some(p => p.id === d.id))) panes = sv.map(p => ({ id:p.id, open:!!p.open, h:Math.max(30, Math.min(400, +p.h || 56)) })); } catch (e){}
+const savePanes = () => { try { localStorage.setItem('btcPanes', JSON.stringify(panes)); } catch (e){} };
+let paneHits = [];      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
+let oiHist = [];        // [{t, v}] 미결제약정(BTC)
+const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '4h':'4h' };
+async function loadOI(iv){
+  try {
+    const r = await fetch(`${FAPI}/futures/data/openInterestHist?symbol=${SYM}&period=${OI_PERIOD[iv] || '5m'}&limit=500`);
+    if (!r.ok) return;
+    const a = await r.json();
+    if (iv !== ST.interval) return;
+    oiHist = a.map(o => ({ t:o.timestamp, v:+o.sumOpenInterest }));
+    if (lastOI) oiHist.push({ t:Date.now(), v:lastOI });
+    dirty = true;
+  } catch (e){}
+}
 let viewSpan = 1, viewPh = 1, viewSlot = 1, viewTop = 8, viewPlotW = 1, viewLo = 0, viewHi = 1;
 const THEMES = {
   dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#a3adb8', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
@@ -387,7 +413,7 @@ async function pollOI(){
       if (oi > lastOI) addPos(lastPrice, oi - lastOI, share(c.tb, c.v));
       else if (lastOI > 0) scaleLiq(oi / lastOI);
     }
-    lastOI = oi; dirty = true;
+    lastOI = oi; oiHist.push({ t:Date.now(), v:oi }); if (oiHist.length > 6000) oiHist.shift(); dirty = true;
   } catch (e){}
 }
 
@@ -450,7 +476,15 @@ function render(){
   }
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
   const AX = 34;   // 하단 시간축 높이 (연도 줄 + 날짜·시각 줄)
-  const cw = W - panelW, top = 8, bot = H - AX - 4, ph = bot - top;
+  // 지표 패널 높이: 메인 차트가 최소 160px은 남도록 필요하면 비율대로 줄임
+  const HDR = 18, nOpen = panes.filter(p => p.open).length;
+  const room = Math.max(0, H - AX - 8 - 160 - HDR * panes.length);
+  const want = panes.reduce((a, p) => a + (p.open ? p.h : 0), 0);
+  const pf = want > room && want > 0 ? room / want : 1;
+  const paneH = p => p.open ? Math.max(20, Math.floor(p.h * pf)) : 0;
+  const panesTotal = panes.reduce((a, p) => a + HDR + paneH(p), 0);
+  const axTop = H - AX;
+  const cw = W - panelW, top = 8, bot = axTop - panesTotal - 4, ph = bot - top;
   { const b = $('toNow');
     const isDefault = !ST.view && !ST.span && !ST.bucket && !ST.range && !ST.minQty && ST.n === Math.round(900 / IV_MIN[ST.interval]);
     const mode = ST.xOff >= 0.5 ? 'now' : isDefault ? '' : 'reset';
@@ -461,7 +495,7 @@ function render(){
       else if (mode === 'reset'){ b.innerHTML = ICON_RESET; b.title = '차트 기본값으로'; b.setAttribute('aria-label', '차트 기본값으로'); }
     }
     if (b.hidden === show) b.hidden = !show;
-    if (show){ b.style.right = (panelW + 12) + 'px'; b.style.bottom = (AX + 12) + 'px'; } }
+    if (show){ b.style.right = (panelW + 12) + 'px'; b.style.bottom = (H - bot + 12) + 'px'; } }
   { const need = ST.n + Math.ceil(ST.xOff) + 50; if (need > candles.length) ensureHistory(need + 1500); }
   ST.xOff = Math.max(0, Math.min(ST.xOff, candles.length - 4));
   const whole = Math.floor(ST.xOff), frac = ST.xOff - whole;   // 소수 부분만큼 부드럽게 밀어서 그림
@@ -505,6 +539,7 @@ function render(){
   const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
   const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
 
+  const tickXs = [];
   // 하단 시간축: 캔들 시각이 눈금 경계를 넘는 첫 캔들에 라벨 (4시간봉처럼 경계와 어긋난 봉도 표시)
   {
     const tz = -new Date().getTimezoneOffset() * 60000, D = 86400000;
@@ -535,16 +570,17 @@ function render(){
       const tw = ctx.measureText(txt).width;
       if (x - tw / 2 < lastRight + 8) continue;          // 앞 라벨과 겹치면 건너뜀
       lastRight = x + tw / 2;
+      tickXs.push(x);
       ticks.push({ x, txt, bold, year:newYear && u.kind !== 'yr' ? String(d.getFullYear()) : null });
       ctx.strokeStyle = T.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, top); ctx.lineTo(Math.round(x) + .5, bot); ctx.stroke();
     }
     L.push(() => {
-      ctx.fillStyle = T.bg; ctx.fillRect(0, bot + 1, cw, H - bot);
-      ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, bot + .5); ctx.lineTo(cw, bot + .5); ctx.stroke();
+      ctx.fillStyle = T.bg; ctx.fillRect(0, bot + 1, cw, 3); ctx.fillRect(0, axTop, cw, AX);
+      ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, axTop + .5); ctx.lineTo(cw, axTop + .5); ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       for (const k of ticks){
-        if (k.year){ ctx.font = '700 13px sans-serif'; ctx.fillStyle = T.inkS; ctx.fillText(k.year, k.x, bot + 10); }   // 해가 바뀌는 곳 위에 연도
-        ctx.font = `${k.bold ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold ? T.inkS : T.mute; ctx.fillText(k.txt, k.x, bot + 25);
+        if (k.year){ ctx.font = '700 13px sans-serif'; ctx.fillStyle = T.inkS; ctx.fillText(k.year, k.x, axTop + 10); }   // 해가 바뀌는 곳 위에 연도
+        ctx.font = `${k.bold ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold ? T.inkS : T.mute; ctx.fillText(k.txt, k.x, axTop + 25);
       }
     });
   }
@@ -821,6 +857,96 @@ function render(){
   ctx.fillStyle = T.price; ctx.fillRect(px - ptw - 4, yp - 9, ptw + 8, 18);
   ctx.globalAlpha = 1;
   ctx.fillStyle = T.priceTxt; ctx.fillText(pt, px, yp);
+
+  // ---------- 하단 지표 패널 ----------
+  paneHits = [];
+  ctx.fillStyle = T.bg; ctx.fillRect(0, bot, W, axTop - bot);
+  const nf = v => Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e4 ? Math.round(v).toLocaleString() : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
+  let py = bot + 4;
+  panes.forEach((pn, pi) => {
+    const h = paneH(pn), y0 = py, y1 = py + HDR;
+    // 제목줄
+    ctx.fillStyle = T.lbg; ctx.fillRect(0, y0, W, HDR);
+    ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, y0 + .5); ctx.lineTo(W, y0 + .5); ctx.stroke();
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = '700 11px sans-serif'; ctx.fillStyle = T.inkS;
+    ctx.fillText((pn.open ? '▾ ' : '▸ ') + PANE_NAME[pn.id], 6, y0 + HDR / 2 + 1);
+    const nameW = ctx.measureText((pn.open ? '▾ ' : '▸ ') + PANE_NAME[pn.id]).width;
+    // 순서 버튼 ▲ ▼ (패널 오른쪽 끝)
+    ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center';
+    [['▲', 'up', cw - 44], ['▼', 'down', cw - 20]].forEach(([g, act, bx]) => {
+      const dis = (act === 'up' && pi === 0) || (act === 'down' && pi === panes.length - 1);
+      ctx.fillStyle = dis ? T.grid : T.ink; ctx.fillText(g, bx, y0 + HDR / 2 + 1);
+      if (!dis) paneHits.push({ x0:bx - 11, x1:bx + 11, y0, y1, act, id:pn.id });
+    });
+    paneHits.push({ x0:0, x1:cw - 56, y0:y0 - 3, y1, act:'head', id:pn.id });
+    py = y1;
+    if (!h){ return; }
+    const top2 = py, bot2 = py + h - 2;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, top2, W, h); ctx.clip();
+    ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
+    for (const x of tickXs){ ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, top2); ctx.lineTo(Math.round(x) + .5, bot2); ctx.stroke(); }
+    let info = '', lo2 = 0, hi2 = 1, fmt = nf;
+    const Y = v => bot2 - (v - lo2) / (hi2 - lo2 || 1) * (bot2 - top2 - 3);
+    const line = (pts, col, w = 1.3) => {   // pts: [x, v]
+      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); let lx = -9, started = false;
+      for (const [x, v] of pts){ if (started && Math.abs(x - lx) < 1) continue; const yy = Y(v); if (!started){ ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy); lx = x; }
+      ctx.stroke(); ctx.lineWidth = 1;
+    };
+    if (pn.id === 'vol'){
+      // 거래량: 캔들 색, 1px보다 촘촘하면 같은 칸끼리 합침
+      const cols = [];
+      vis.forEach((c, i) => {
+        const x = xOf(i); if (x < -2 || x > plotW + 2) return;
+        if (slot >= 2) cols.push({ x, v:c.v, up:c.c >= c.o, w:bw });
+        else { const px = Math.floor(x / 2) * 2, lc = cols[cols.length - 1];
+          if (lc && lc.px === px){ lc.v += c.v; lc.net += c.c >= c.o ? c.v : -c.v; lc.up = lc.net >= 0; }
+          else cols.push({ px, x:px + 1, v:c.v, net:c.c >= c.o ? c.v : -c.v, up:c.c >= c.o, w:1.5 }); }
+      });
+      lo2 = 0; hi2 = Math.max(1e-9, ...cols.map(c => c.v));
+      for (const c of cols){ ctx.fillStyle = c.up ? 'rgba(38,166,154,.6)' : 'rgba(239,83,80,.6)'; const yy = Y(c.v); ctx.fillRect(c.x - c.w / 2, yy, c.w, bot2 - yy); }
+      const last = vis[vis.length - 1]; info = last ? `${nf(last.v)} BTC` : '';
+    } else if (pn.id === 'rsi'){
+      // RSI 14 (와일더 방식), 보이는 구간 앞쪽 500개로 미리 계산해 시작값을 안정화
+      const endI = candles.length - Math.floor(ST.xOff), startI = endI - vis.length, warm = Math.max(1, startI - 500);
+      let ag = 0, al = 0, n0 = 0; const pts = [];
+      for (let i = warm; i < endI; i++){
+        const d = candles[i].c - candles[i - 1].c, g = d > 0 ? d : 0, l = d < 0 ? -d : 0;
+        if (n0 < 14){ ag += g / 14; al += l / 14; n0++; }
+        else { ag = (ag * 13 + g) / 14; al = (al * 13 + l) / 14; }
+        if (i >= startI && n0 >= 14){ const r = al === 0 ? 100 : 100 - 100 / (1 + ag / al); pts.push([xOf(i - startI), r]); }
+      }
+      lo2 = 0; hi2 = 100;
+      ctx.setLineDash([3, 3]); ctx.strokeStyle = T.mute; ctx.globalAlpha = .6;
+      for (const lv of [30, 70]){ ctx.beginPath(); ctx.moveTo(0, Y(lv)); ctx.lineTo(cw, Y(lv)); ctx.stroke(); }
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(142,91,214,.08)'; ctx.fillRect(0, Y(70), cw, Y(30) - Y(70));
+      line(pts, '#8e5bd6');
+      info = pts.length ? pts[pts.length - 1][1].toFixed(1) : '';
+      fmt = v => v.toFixed(0);
+    } else if (pn.id === 'oi'){
+      // 미결제약정: 바이낸스 OI 기록(봉 간격에 맞춘 주기) + 15초마다 받는 실시간 값
+      const t1 = vis[vis.length - 1].t + tStep, pts = oiHist.filter(o => o.t >= t0 - tStep * 2 && o.t <= t1 + tStep).map(o => [Math.min(cw, (off + (o.t - t0) / tStep) * slot + slot / 2), o.v]);
+      if (pts.length){
+        lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad;
+        line(pts, '#d18b00', 1.5);
+        const a = pts[0][1], b = pts[pts.length - 1][1]; info = `${nf(b)} BTC (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
+      } else info = ST.xOff > 0 ? '이 구간 기록 없음 (최근 약 30일까지만 제공)' : '불러오는 중…';
+    } else if (pn.id === 'cvd'){
+      // CVD: 화면 왼쪽 끝부터 누적한 (시장가 매수 - 시장가 매도) 거래량
+      let cum = 0; const pts = [];
+      vis.forEach((c, i) => { cum += 2 * (c.tb || 0) - c.v; pts.push([xOf(i), cum]); });
+      lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad;
+      ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1;
+      line(pts, '#1f77d0', 1.5);
+      info = `${cum >= 0 ? '+' : ''}${nf(cum)} BTC`;
+    }
+    ctx.restore();
+    // 오른쪽 축 값(최대·최소)과 제목줄의 현재 값
+    ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
+    ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5);
+    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = T.ink; ctx.fillText(info, 14 + nameW, y0 + HDR / 2 + 1);
+    py += h;
+  });
 }
 
 function updateStatus(){
@@ -867,7 +993,7 @@ async function changeInterval(iv){
     ST.interval = iv; noMoreOlder = false; setN(ST.dur / IV_MIN[iv], true);
     ST.xOff = 0; ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0;
     candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
-    lastErr = '';
+    lastErr = ''; oiHist = []; loadOI(iv);
     startKlineWS();
   } catch (e){
     if (req !== ivReq) return;
@@ -957,8 +1083,20 @@ cv.addEventListener('wheel', e => {
 }, { passive:false });
 const ptrs = new Map();
 let drag = null, pinch = null, lastTap = { t:0, x:0, y:0 };
+let paneDrag = null;
+const paneAt = p => paneHits.find(h => p.x >= h.x0 && p.x <= h.x1 && p.y >= h.y0 && p.y <= h.y1);
 cv.addEventListener('pointerdown', e => {
-  ptrs.set(e.pointerId, posOf(e));
+  const pp = posOf(e), hp = ptrs.size === 0 && paneAt(pp);
+  if (hp){   // 지표 제목줄: ▲▼ = 순서 변경, 제목줄 클릭 = 접기/펼치기, 위아래로 끌기 = 높이 조절
+    try { cv.setPointerCapture(e.pointerId); } catch (_){}
+    const i = panes.findIndex(p => p.id === hp.id);
+    if (hp.act === 'up' || hp.act === 'down'){
+      const j = hp.act === 'up' ? i - 1 : i + 1; [panes[i], panes[j]] = [panes[j], panes[i]]; savePanes(); redraw(); return;
+    }
+    paneDrag = { id:hp.id, y:e.clientY, h0:panes[i].open ? panes[i].h : 0, moved:false, pid:e.pointerId };
+    return;
+  }
+  ptrs.set(e.pointerId, pp);
   try { cv.setPointerCapture(e.pointerId); } catch (_){}
   if (ptrs.size === 2){
     const [a, b] = [...ptrs.values()];
@@ -968,6 +1106,15 @@ cv.addEventListener('pointerdown', e => {
   }
 });
 cv.addEventListener('pointermove', e => {
+  if (paneDrag){
+    const dy = e.clientY - paneDrag.y; if (Math.abs(dy) > 3) paneDrag.moved = true;
+    if (paneDrag.moved){ const p = panes.find(q => q.id === paneDrag.id); p.h = Math.max(30, Math.min(400, paneDrag.h0 - dy)); p.open = true; redraw(); }
+    return;
+  }
+  if (!ptrs.size && e.pointerType === 'mouse'){   // 마우스 모양: 제목줄은 위아래 화살표, 버튼은 손가락
+    const h = paneAt(posOf(e)); const c = h ? (h.act === 'head' ? 'ns-resize' : 'pointer') : 'grab';
+    if (cv.style.cursor !== c) cv.style.cursor = c;
+  }
   if (!ptrs.has(e.pointerId)) return;
   ptrs.set(e.pointerId, posOf(e));
   if (pinch && ptrs.size === 2){   // 두 손가락: 손가락 사이 중심을 고정점으로, 가로 간격 = 시간축, 세로 간격 = 가격축
@@ -988,6 +1135,11 @@ cv.addEventListener('pointermove', e => {
   }
 });
 function endPtr(e){
+  if (paneDrag && e.pointerId === paneDrag.pid){
+    const p = panes.find(q => q.id === paneDrag.id);
+    if (!paneDrag.moved && e.type === 'pointerup') p.open = !p.open;
+    paneDrag = null; savePanes(); redraw(); return;
+  }
   ptrs.delete(e.pointerId);
   if (pinch){ if (ptrs.size < 2){ pinch = null; drag = null; lastTap.t = 0; } return; }
   if (drag && !drag.moved && e.type === 'pointerup' && e.pointerType !== 'mouse'){   // 마우스는 dblclick 이벤트가 따로 처리
@@ -999,7 +1151,7 @@ function endPtr(e){
 }
 cv.addEventListener('pointerup', endPtr);
 cv.addEventListener('pointercancel', endPtr);
-cv.addEventListener('dblclick', resetView);
+cv.addEventListener('dblclick', e => { if (!e || !paneAt(posOf(e))) resetView(); });
 // 테마 / 히트맵 팔레트 (이 브라우저에 기억)
 const store = { get(k){ try { return localStorage.getItem(k); } catch (e){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch (e){} }, del(k){ try { localStorage.removeItem(k); } catch (e){} } };
 function applyLook(){
@@ -1032,6 +1184,7 @@ $('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'ligh
 // 설정 초기화: 모든 선택을 기본값으로
 $('reset').addEventListener('click', () => {
   store.del('btcFold'); setFold(false);   // 다크/라이트 모드는 유지
+  panes = PANE_DEF(); savePanes();
   ST.bucket = 0; $('bucket').value = '0';
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
