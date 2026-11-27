@@ -267,7 +267,7 @@ function onKline(k){
   const c = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, tb:+k.V };
   const last = candles[candles.length - 1];
   if (last && last.t === c.t) candles[candles.length - 1] = c;
-  else if (!last || c.t > last.t){ candles.push(c); if (candles.length > 1500) candles.shift(); }
+  else if (!last || c.t > last.t){ candles.push(c); if (candles.length > MAXN + 2000) candles.shift(); }
   lastPrice = c.c;
   sweepLiq(c.c, c.c);
   dirty = true;
@@ -412,6 +412,7 @@ function render(){
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
   const AX = 22;   // 하단 시간축 높이
   const cw = W - panelW, top = 8, bot = H - AX - 4, ph = bot - top;
+  { const need = ST.n + Math.ceil(ST.xOff) + 50; if (need > candles.length) ensureHistory(need + 1500); }
   ST.xOff = Math.max(0, Math.min(ST.xOff, candles.length - 4));
   const whole = Math.floor(ST.xOff), frac = ST.xOff - whole;   // 소수 부분만큼 부드럽게 밀어서 그림
   const endIdx = candles.length - whole;
@@ -555,13 +556,24 @@ function render(){
   }
 
   // 캔들
-  vis.forEach((c, i) => {
-    const x = xOf(i), up = c.c >= c.o;
+  const drawCandle = (x, c, w) => {
+    const up = c.c >= c.o;
     ctx.strokeStyle = ctx.fillStyle = up ? '#26a69a' : '#ef5350';
     ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, y(c.h)); ctx.lineTo(Math.round(x) + .5, y(c.l)); ctx.stroke();
     const yo = y(c.o), yc = y(c.c);
-    ctx.fillRect(x - bw / 2, Math.min(yo, yc), bw, Math.max(1, Math.abs(yo - yc)));
-  });
+    ctx.fillRect(x - w / 2, Math.min(yo, yc), w, Math.max(1, Math.abs(yo - yc)));
+  };
+  if (slot >= 2) vis.forEach((c, i) => drawCandle(xOf(i), c, bw));
+  else {
+    // 캔들이 1px보다 촘촘하면 같은 픽셀 칸에 들어가는 캔들을 하나로 합쳐 그림 (수만 개도 가볍게)
+    let col = null, cx = -1;
+    vis.forEach((c, i) => {
+      const px = Math.floor(xOf(i) / 2) * 2;
+      if (px !== cx){ if (col) drawCandle(cx + 1, col, 1.5); cx = px; col = { o:c.o, h:c.h, l:c.l, c:c.c }; }
+      else { if (c.h > col.h) col.h = c.h; if (c.l < col.l) col.l = c.l; col.c = c.c; }
+    });
+    if (col) drawCandle(cx + 1, col, 1.5);
+  }
 
   // 실제 청산 체결 마커
   if (ST.force && vis.length){
@@ -704,8 +716,8 @@ function render(){
     ctx.fillStyle = T.lbg; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
     ctx.fillStyle = T.hint; ctx.fillText(t, cw - 61, 13);
   });
-  if (loadingIv) L.push(() => {
-    const t = `${loadingIv} 봉 불러오는 중…`;
+  if (loadingIv || loadingOlder) L.push(() => {
+    const t = loadingIv ? `${loadingIv} 봉 불러오는 중…` : `과거 캔들 불러오는 중… (${candles.length.toLocaleString()}개)`;
     ctx.font = '600 12px sans-serif'; ctx.textAlign = 'center';
     const tw = ctx.measureText(t).width;
     ctx.fillStyle = T.lbg; ctx.fillRect(cw / 2 - tw / 2 - 8, 6, tw + 16, 20);
@@ -739,12 +751,30 @@ function startKlineWS(){
 }
 // 봉 바꾸기: 새 데이터를 다 받은 뒤 한 번에 교체 → 받는 동안은 기존 차트를 그대로 보여줘서 화면이 번쩍이지 않음
 let loadingIv = null, ivReq = 0;
+// 과거 캔들 이어 받기: 바이낸스는 한 번에 1500개까지라, 축소·과거 이동으로 더 필요해지면 1500개씩 앞쪽에 붙임
+const MAXN = 72000;   // 1500 × 48 (5분봉 약 250일)
+let loadingOlder = false, noMoreOlder = false;
+async function ensureHistory(need){
+  if (loadingOlder || noMoreOlder || !candles.length || candles.length >= need || candles.length >= MAXN + 1500) return;
+  loadingOlder = true; dirty = true;
+  const iv = ST.interval, req = ivReq;
+  try {
+    while (candles.length < need && candles.length < MAXN + 1500){
+      const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=${iv}&endTime=${candles[0].t - 1}&limit=1500`);
+      if (!r.ok) break;
+      const a = (await r.json()).map(k => ({ t:k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], tb:+k[9] }));
+      if (req !== ivReq || iv !== ST.interval) return;   // 그사이 봉을 바꿨으면 중단
+      if (!a.length){ noMoreOlder = true; break; }       // 상장 이전까지 다 받음
+      candles = a.concat(candles); dirty = true;           // 오른쪽 기준 위치(xOff)라 화면은 그대로
+    }
+  } catch (e){} finally { loadingOlder = false; dirty = true; }
+}
 async function changeInterval(iv){
   const req = ++ivReq; loadingIv = iv; dirty = true;
   try {
     const data = await fetchKlines(iv);
     if (req !== ivReq) return;                  // 그사이 다른 봉을 골랐으면 버림
-    ST.interval = iv; setN(ST.dur / IV_MIN[iv], true);
+    ST.interval = iv; noMoreOlder = false; setN(ST.dur / IV_MIN[iv], true);
     ST.xOff = 0; ST.view = null; ST.span = null; autoHalf = 0; autoBucket = 0;
     candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
     lastErr = '';
@@ -773,10 +803,10 @@ for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', 
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
 const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '4h':240 };
-const N_OPTS = [15, 30, 60, 90, 120, 180, 240, 300, 500, 900];
+const N_OPTS = [15, 30, 60, 90, 120, 180, 240, 300, 500, 900, 1500, 3000, 9000, 72000];
 let nHtml = '';
 function setN(n, keepDur){
-  ST.nf = Math.max(4, Math.min(1500, n));   // 소수까지 보관해서 휠을 조금씩 돌려도 확대가 멈추지 않게
+  ST.nf = Math.max(4, Math.min(MAXN, n));   // 소수까지 보관해서 휠을 조금씩 돌려도 확대가 멈추지 않게
   ST.n = Math.round(ST.nf);
   if (!keepDur) ST.dur = ST.n * IV_MIN[ST.interval];
   const opts = [...new Set([...N_OPTS, ST.n])].sort((a, b) => a - b);
@@ -811,7 +841,7 @@ function zoomAt(ft, fp, cx, cy, sync){
   if (fp !== 1){
     const v = manual(), span = v.hi - v.lo;
     const u = Math.max(0, Math.min(1, (cy - viewTop) / viewPh));    // 커서의 세로 위치 비율
-    const pc = v.hi - u * span, ns = Math.max(5, Math.min(60000, span * fp));
+    const pc = v.hi - u * span, ns = Math.max(5, Math.min(200000, span * fp));
     ST.view = { hi:pc + u * ns, lo:pc + u * ns - ns };
   }
   redraw();
