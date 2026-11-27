@@ -66,7 +66,7 @@ footer.folded #status{margin-left:auto}
     <button id="reset" type="button">설정 초기화</button>
   </div>
 </header>
-<div id="wrap"><canvas id="cv"></canvas><div id="ctx" class="ctxmenu" hidden><button id="ctxReset" type="button">분봉 유지하고 차트 기본값으로</button></div></div>
+<div id="wrap"><canvas id="cv"></canvas><div id="ctx" class="ctxmenu" hidden><button id="ctxReset" type="button">차트 기본값으로</button></div></div>
 <footer id="foot">
   <button id="legendBtn" type="button">설명 접기</button>
   <div class="legend">
@@ -76,7 +76,7 @@ footer.folded #status{margin-left:auto}
       <div class="row"><dt><i class="sw" id="swL"></i>파란 띠</dt><dd>롱 포지션 청산이 몰려 있을 것으로 추정되는 가격대입니다. 색이 진할수록 규모가 큽니다.</dd></div>
       <div class="row"><dt><i class="sw" id="swS"></i>빨간 띠</dt><dd>숏 포지션 청산이 몰려 있을 것으로 추정되는 가격대입니다. 색이 진할수록 규모가 큽니다.</dd></div>
       <div class="row"><dt><i class="sw" style="background:rgba(128,128,134,.5)"></i>회색 띠</dt><dd>가격이 닿아 소진된 청산 물량입니다. 띠 끝의 세로 눈금이 닿은 시점이고, 시간이 지나면 옅어지다 사라집니다. 큰 물량일수록 오래 남습니다.</dd></div>
-      <div class="row"><dt>▼ ▲ 삼각형</dt><dd>실제로 체결된 롱(▼)·숏(▲) 청산입니다. 옆의 숫자는 청산 금액입니다.</dd></div>
+      <div class="row"><dt>▼ ▲ 삼각형</dt><dd>실제로 체결된 롱(▼)·숏(▲) 청산입니다. 옆의 숫자는 청산 금액이며, 금액끼리 너무 붙어 있으면 일부가 생략될 수 있습니다.</dd></div>
       <div class="row"><dt>점선·실선 매물벽</dt><dd>매수·매도 쪽마다 가장 큰 매물벽 3개입니다. 2분 이상 유지되면 실선과 테두리로 바뀝니다.</dd></div>
       <div class="row"><dt>유지 시간</dt><dd>매물벽이 유지된 시간입니다. ≥ 표시는 차트를 열기 전부터 있던 벽입니다.</dd></div>
       <div class="row"><dt>취소</dt><dd>가격이 닿기 전에 사라진 큰 벽입니다. 스푸핑일 가능성이 있습니다.</dd></div>
@@ -86,12 +86,11 @@ footer.folded #status{margin-left:auto}
     <section><h4>조작 방법</h4><dl>
       <div class="row"><dt>휠</dt><dd>현재가가 가운데 고정된 상태에서는 커서 위치를 기준으로 시간축을 확대·축소하고 현재가는 가운데에 그대로 둡니다. 드래그로 옮긴 뒤에는 커서 위치를 기준으로 확대·축소합니다.</dd></div>
       <div class="row"><dt>Ctrl + 휠</dt><dd>가격축만 확대·축소합니다.</dd></div>
-      <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다. 오른쪽으로 끌면 과거로 갑니다.</dd></div>
+      <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다.</dd></div>
       <div class="row"><dt>두 손가락 (터치)</dt><dd>가로로 벌리면 시간축, 세로로 벌리면 가격축을 확대·축소합니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</dd></div>
-      <div class="row"><dt>우클릭 · 길게 누르기</dt><dd>분봉은 그대로 두고 봉 개수·구간·범위·최소 규모·확대 상태를 기본값으로 되돌리는 메뉴가 나옵니다.</dd></div>
+      <div class="row"><dt>우클릭 · 길게 누르기</dt><dd>봉 개수·구간·범위·최소 규모·확대 상태를 기본값으로 되돌리는 메뉴가 나옵니다.</dd></div>
       <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드를 뺀 모든 설정을 기본값으로 되돌립니다.</dd></div>
-      <div class="row"><dt>설명 접기</dt><dd>이 설명을 숨겨 차트를 더 크게 봅니다.</dd></div>
     </dl></section>
   </div>
   <span id="status">연결 중…</span>
@@ -378,7 +377,7 @@ async function pollOI(){
 /* ---------------- 그리기 ---------------- */
 const nice = x => { const e = 10 ** Math.floor(Math.log10(x)); for (const m of [1,2,2.5,5,10]) if (m * e >= x) return m * e; return 10 * e; };
 const fq = q => q >= 100 ? q.toFixed(0) : q >= 10 ? q.toFixed(1) : q.toFixed(2);
-const fu = u => u >= 1e9 ? '$' + (u / 1e9).toFixed(2) + 'B' : u >= 1e6 ? '$' + (u / 1e6).toFixed(1) + 'M' : '$' + (u / 1e3).toFixed(0) + 'K';
+const fu = u => u >= 1e9 ? '$' + (u / 1e9).toFixed(2) + 'B' : u >= 1e6 ? '$' + (u / 1e6).toFixed(1) + 'M' : u >= 1e3 ? '$' + (u / 1e3).toFixed(0) + 'K' : '$' + Math.round(u);
 /* ---------------- 매물벽 유지 시간 추적 ----------------
    구간별로 '최고치의 50% 이상'을 연속 유지한 시간을 잰다.
    절반 아래로 빠지거나 사라지면, 큰 벽이었던 경우 가격 도달 여부로 체결/취소를 판정. */
@@ -628,11 +627,15 @@ function render(){
     {
       ctx.font = '700 10px sans-serif';
       for (const g of [...list].reverse()){
-        if (g.usd < 1e3) break;   // $1K 이상은 모두 표시 (겹치면 작은 금액부터 생략)
-        const x = xOf(g.i), yy = y(g.pu / g.usd);
+        // 금액은 모두 표시. 기본 자리가 다른 금액과 겹치면 삼각형 반대편 → 좌우 → 그래도 안 되면 생략
+        const x0 = xOf(g.i), yy = y(g.pu / g.usd);
         const s = Math.max(2.5, Math.min(18, Math.max(7, Math.sqrt(g.usd / 3e3))) * k);
-        const ty = g.long ? yy - s - 7 : yy + s + 8, txt = fu(g.usd), tw = ctx.measureText(txt).width;
-        if (hit(x - tw / 2 - 3, x + tw / 2 + 3, ty - 7, ty + 7)) continue;
+        const txt = fu(g.usd), tw = ctx.measureText(txt).width;
+        const near = g.long ? yy - s - 7 : yy + s + 8, far = g.long ? yy + s * .4 + 8 : yy - s * .4 - 8;
+        const spots = [[x0, near], [x0, far], [x0 - tw / 2 - s - 4, yy], [x0 + tw / 2 + s + 4, yy]];
+        const spot = spots.find(([sx, sy]) => !hit(sx - tw / 2 - 3, sx + tw / 2 + 3, sy - 7, sy + 7));
+        if (!spot) continue;
+        const [x, ty] = spot;
         boxes.push([x - tw / 2 - 3, x + tw / 2 + 3, ty - 7, ty + 7]);
         L.push(() => {
           ctx.font = '700 10px sans-serif'; ctx.textAlign = 'center';
