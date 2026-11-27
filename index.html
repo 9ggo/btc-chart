@@ -540,8 +540,8 @@ function render(){
   const pf = want > room && want > 0 ? room / want : 1;
   const paneH = p => p.open ? Math.max(20, Math.floor(p.h * pf)) : 0;
   const panesTotal = panes.reduce((a, p) => a + HDR + paneH(p), 0);
-  const axTop = H - AX;
-  const cw = W - panelW, top = 8, bot = axTop - panesTotal - 4, ph = bot - top;
+  const cw = W - panelW, top = 8, bot = H - AX - panesTotal - 4, ph = bot - top;
+  const axTop = bot + 4;   // 시간축은 메인 차트 바로 밑, 지표 패널은 그 아래
   { const b = $('toNow');
     { const m = ST.n * IV_MIN[ST.interval], f = (v, u) => (v < 10 ? +v.toFixed(1) : Math.round(v)) + u;   // 보이는 봉 수 × 봉 길이
       const t = '≈ ' + (m < 60 ? f(m, '분') : m < 2880 ? f(m / 60, '시간') : m < 60 * 24 * 60 ? f(m / 1440, '일') : m < 43830 * 11.5 ? f(m / 43830, '개월') : f(m / 525960, '년'));
@@ -922,9 +922,9 @@ function render(){
 
   // ---------- 하단 지표 패널 ----------
   paneHits = []; priceTag = null; priceBox = null;
-  ctx.fillStyle = T.bg; ctx.fillRect(0, bot, W, axTop - bot);
+  ctx.fillStyle = T.bg; ctx.fillRect(cw, bot, W - cw, axTop + AX - bot); ctx.fillRect(0, axTop + AX, W, H - axTop - AX);   // 시간축(왼쪽)은 이미 그렸으니 남기고 나머지만
   const nf = v => Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e4 ? Math.round(v).toLocaleString() : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
-  let py = bot + 4;
+  let py = axTop + AX;
   panes.forEach((pn, pi) => {
     const h = paneH(pn), y0 = py, y1 = py + HDR;
     // 제목줄
@@ -1073,7 +1073,7 @@ function render(){
   if (hIdx >= 0 && vis[hIdx]){
     const c = vis[hIdx], hx = Math.round(xOf(hIdx)) + .5;
     ctx.save(); ctx.strokeStyle = ST.theme === 'light' ? '#000' : '#fff'; ctx.globalAlpha = .75; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;   // 십자선: 라이트=검정, 다크=흰색
-    ctx.beginPath(); ctx.moveTo(hx, top); ctx.lineTo(hx, axTop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx, top); ctx.lineTo(hx, H); ctx.stroke();
     const inMain = hover.y >= top && hover.y <= bot;
     if (inMain){ ctx.beginPath(); ctx.moveTo(0, Math.round(hover.y) + .5); ctx.lineTo(cw + 2, Math.round(hover.y) + .5); ctx.stroke(); }
     ctx.restore();
