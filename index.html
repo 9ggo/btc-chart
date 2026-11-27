@@ -17,11 +17,8 @@ body{display:flex;flex-direction:column}
 .ctxmenu[hidden]{display:none}
 .ctxmenu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 12px;white-space:nowrap}
 .ctxmenu button:hover,.ctxmenu button:focus-visible{background:var(--btn2)}
-header .ref{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:12px;background:var(--btn)}
-header .ref a{padding:4px 10px;color:var(--ink);font-weight:700;text-decoration:none;border-right:1px solid var(--line)}
-header .ref a:hover{background:var(--btn2)}
-header .ref button{border:0;border-radius:0;padding:4px 10px;font-size:12px;font-weight:500;background:transparent;color:var(--dim)}
-header .ref button b{color:var(--ink);letter-spacing:.04em}
+header .ref{padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:700;color:var(--ink);text-decoration:none;background:var(--btn)}
+header .ref:hover{background:var(--btn2)}
 header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
 .switch{position:relative;cursor:pointer;gap:6px}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -69,7 +66,7 @@ footer.folded{display:none}
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="0.5" value="0" style="width:64px">M</label>
   <div class="right">
-    <div class="ref"><a href="https://www.okx.com/join/JOUFKKAL" target="_blank" rel="noopener">OKX 가입하기</a><button id="refCopy" type="button" title="레퍼럴 코드 복사">코드 <b>JOUFKKAL</b></button></div>
+    <a class="ref" href="https://www.okx.com/join/JOUFKKAL" target="_blank" rel="noopener">Join OKX</a>
     <label class="switch"><span>다크</span><input id="theme" type="checkbox" role="switch" aria-label="라이트 모드"><i></i><span>라이트</span></label>
     <button id="reset" type="button">설정 초기화</button>
   </div>
@@ -1303,13 +1300,6 @@ const ICON_NOW = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="t
 const ICON_RESET = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 3a5 5 0 1 1-4.6 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.6 2.6l1.9 3.9 3.8-1.9z" fill="currentColor"/></svg>';
 cv.addEventListener('contextmenu', e => e.preventDefault());   // 차트 위 우클릭 시 브라우저 메뉴 안 뜨게
 $('toNow').addEventListener('click', () => { if ($('toNow').dataset.mode === 'now') resetView(); else chartDefaults(); });
-// 레퍼럴 코드 복사
-$('refCopy').addEventListener('click', async () => {
-  const b = $('refCopy'), old = b.innerHTML;
-  try { await navigator.clipboard.writeText('JOUFKKAL'); b.textContent = '복사됨 ✓'; }
-  catch (e){ b.textContent = '코드: JOUFKKAL'; }
-  setTimeout(() => { b.innerHTML = old; }, 1500);
-});
 $('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
 // 설정 초기화: 모든 선택을 기본값으로
 $('reset').addEventListener('click', () => {
