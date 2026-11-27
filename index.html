@@ -835,6 +835,7 @@ function render(){
     // 크기는 캔들 폭에 비례: 캔들 폭 20px일 때 기본 크기, 확대하면 최대 2배까지 커지고 축소하면 일찍부터 작아짐
     const k = Math.max(0.25, Math.min(2, slot / 20));
     const list = grp.sort((a, b) => a.usd - b.usd);   // 큰 것이 위에 오도록 작은 것부터
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, H); ctx.clip();
     for (const g of (ST.tri ? list : [])){   // 삼각형 끄면 숫자만 남김
       const x = xOf(g.i), yy = y(g.pu / g.usd);
       const s = Math.max(2.5, Math.min(18, Math.max(7, Math.sqrt(g.usd / 3e3))) * k);
@@ -846,6 +847,7 @@ function render(){
       ctx.fillStyle = g.long ? '#ffb000' : '#d17bff'; ctx.fill();
       if (s > 4){ ctx.strokeStyle = T.mark; ctx.lineWidth = 0.5; ctx.stroke(); ctx.lineWidth = 1; }
     }
+    ctx.restore();
     // 금액 글자: 삼각형이 너무 작지 않을 때, 큰 금액부터 겹치지 않게 맨 앞에 그림
     {
       ctx.font = '700 10px sans-serif';
@@ -861,8 +863,10 @@ function render(){
         const [x, ty] = spot;
         boxes.push([x - tw / 2 - 3, x + tw / 2 + 3, ty - 7, ty + 7]);
         L.push(() => {
+          ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, H); ctx.clip();   // 호가 패널로 넘친 부분은 가림
           ctx.font = '700 10px sans-serif'; ctx.textAlign = 'center';
           ctx.fillStyle = T.inkS; ctx.fillText(txt, x, ty);
+          ctx.restore();
         });
       }
     }
