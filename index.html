@@ -439,7 +439,7 @@ function render(){
     ctx.fillStyle = T.mute; ctx.font = '14px sans-serif'; ctx.fillText('데이터 불러오는 중…', 16, 30); return;
   }
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
-  const AX = 22;   // 하단 시간축 높이
+  const AX = 34;   // 하단 시간축 높이 (연도 줄 + 날짜·시각 줄)
   const cw = W - panelW, top = 8, bot = H - AX - 4, ph = bot - top;
   { const b = $('toNow'), show = ST.xOff >= 0.5;   // 최신 캔들이 화면 밖이면 '현재로' 버튼
     if (b.hidden === show) b.hidden = !show;
@@ -487,29 +487,47 @@ function render(){
   const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
   const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
 
-  // 하단 시간축: 라벨 간격이 약 90px 이상 되도록 보기 좋은 시간 단위를 고름 (현지 시간 기준)
+  // 하단 시간축: 캔들 시각이 눈금 경계를 넘는 첫 캔들에 라벨 (4시간봉처럼 경계와 어긋난 봉도 표시)
   {
-    const tz = -new Date().getTimezoneOffset() * 60000, M = 60000;
-    const steps = [1, 5, 15, 30, 60, 120, 240, 360, 720, 1440, 2880, 10080].map(m => m * M);
-    const step = steps.find(st => st >= tStep && st / tStep * slot >= 90) || steps[steps.length - 1];
+    const tz = -new Date().getTimezoneOffset() * 60000, D = 86400000;
+    const units = [
+      ...[1, 5, 15, 30, 60, 120, 240, 360, 720].map(m => ({ ms:m * 60000, kind:'min', key:t => Math.floor((t + tz) / (m * 60000)) })),
+      ...[1, 2, 7, 14].map(d => ({ ms:d * D, kind:'day', key:t => Math.floor((t + tz) / D / d) })),
+      ...[1, 3, 6].map(k => ({ ms:k * 30.44 * D, kind:'mon', key:t => { const d = new Date(t); return Math.floor((d.getFullYear() * 12 + d.getMonth()) / k); } })),
+      ...[1, 2, 5, 10].map(k => ({ ms:k * 365.25 * D, kind:'yr', key:t => Math.floor(new Date(t).getFullYear() / k) }))
+    ];
+    const u = units.find(v => v.ms >= tStep && v.ms / tStep * slot >= 90) || units[units.length - 1];
+    const dayKey = t => Math.floor((t + tz) / D);
     const ticks = [];
-    let prevDay = null;
-    for (let i = 0; i < vis.length; i++){
-      const t = vis[i].t;
-      if ((t + tz) % step !== 0) continue;
+    let lastRight = -1e9;
+    ctx.font = '600 11px sans-serif';
+    for (let i = 1; i < vis.length; i++){
+      const t = vis[i].t, pt = vis[i - 1].t;
+      if (u.key(t) === u.key(pt)) continue;
       const x = xOf(i); if (x < 0 || x > plotW) continue;
-      const d = new Date(t), day = d.getMonth() * 40 + d.getDate();
-      const newDay = (t + tz) % 86400000 === 0 || step >= 86400000;
-      const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-      ticks.push({ x, txt:newDay ? `${d.getMonth() + 1}/${d.getDate()}` : hm, bold:newDay });
-      prevDay = day;
+      const d = new Date(t), pd = new Date(pt);
+      const newYear = d.getFullYear() !== pd.getFullYear();
+      let txt, bold = false;
+      if (u.kind === 'min'){
+        if (dayKey(t) !== dayKey(pt)){ txt = `${d.getMonth() + 1}/${d.getDate()}`; bold = true; }
+        else txt = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      } else if (u.kind === 'day'){ txt = `${d.getMonth() + 1}/${d.getDate()}`; bold = d.getMonth() !== pd.getMonth(); }
+      else if (u.kind === 'mon'){ txt = `${d.getMonth() + 1}월`; bold = newYear; }
+      else { txt = String(d.getFullYear()); bold = true; }
+      const tw = ctx.measureText(txt).width;
+      if (x - tw / 2 < lastRight + 8) continue;          // 앞 라벨과 겹치면 건너뜀
+      lastRight = x + tw / 2;
+      ticks.push({ x, txt, bold, year:newYear && u.kind !== 'yr' ? String(d.getFullYear()) : null });
       ctx.strokeStyle = T.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, top); ctx.lineTo(Math.round(x) + .5, bot); ctx.stroke();
     }
     L.push(() => {
       ctx.fillStyle = T.bg; ctx.fillRect(0, bot + 1, cw, H - bot);
       ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, bot + .5); ctx.lineTo(cw, bot + .5); ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      for (const k of ticks){ ctx.font = `${k.bold ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold ? T.inkS : T.mute; ctx.fillText(k.txt, k.x, bot + AX / 2 + 2); }
+      for (const k of ticks){
+        if (k.year){ ctx.font = '700 13px sans-serif'; ctx.fillStyle = T.inkS; ctx.fillText(k.year, k.x, bot + 10); }   // 해가 바뀌는 곳 위에 연도
+        ctx.font = `${k.bold ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold ? T.inkS : T.mute; ctx.fillText(k.txt, k.x, bot + 25);
+      }
     });
   }
 
