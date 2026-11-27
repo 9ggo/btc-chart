@@ -24,6 +24,9 @@ header .ref-rot{display:inline-grid}
 header .ref-rot .ref{grid-area:1/1;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s ease}
 header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 @media (prefers-reduced-motion:reduce){header .ref-rot .ref{transition:none}}
+header .mk{font-size:12px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+header .mk b{color:var(--ink)}
+header .mk .up{color:#0f9d58}header .mk .dn{color:#d93025}
 header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
 .switch{position:relative;cursor:pointer;gap:6px}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -42,7 +45,7 @@ input[type=checkbox]{accent-color:#58a6ff}
 button{background:var(--btn);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-weight:600;font-size:13px;line-height:1.4;font-family:inherit;cursor:pointer;font-variant-numeric:tabular-nums}
 button:active{background:var(--btn2)}
 #wrap{position:relative;flex:1;min-height:300px}
-#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);background:var(--panel);border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px 12px;align-items:flex-end}
 .legend{flex:1 1 700px;min-width:0;max-height:52vh;overflow:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:6px 40px}
 .legend h4{margin:2px 0 6px;font-size:14px;color:var(--ink)}
@@ -65,6 +68,8 @@ footer.folded{display:none}
 <body>
 <header>
   <b title="바이낸스 USDⓈ-M 선물 BTCUSDT 무기한 계약">BINANCE:BTCUSDT.P</b>
+  <span class="mk" id="mkUsdt" title="업비트 테더(USDT) 원화 가격">USDT ₩—</span>
+  <span class="mk" id="mkCb" title="코인베이스 BTC-USD 가격과 바이낸스 현물 BTCUSDT 가격의 차이">CB 프리미엄 —</span>
   <label>봉 <select id="interval"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option><option>1h</option><option>4h</option></select></label>
   <label>봉 개수 <select id="n"></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
@@ -94,6 +99,8 @@ footer.folded{display:none}
       <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다.</dd></div>
       <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
       <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 오르면 매수 우위입니다.</dd></div>
+      <div class="row"><dt>USDT ₩</dt><dd>업비트의 테더 원화 가격입니다. 업비트에 연결되지 않으면 빗썸 가격을 씁니다.</dd></div>
+      <div class="row"><dt>CB 프리미엄</dt><dd>코인베이스 BTC-USD 가격이 바이낸스 현물 BTCUSDT보다 얼마나 비싼지(+) 싼지(−)입니다. 미국 쪽 매수세가 강하면 +로 커지는 경향이 있습니다.</dd></div>
       <div class="row"><dt>호가 데이터 끝</dt><dd>지금까지 확인된 호가 범위의 끝입니다. 가격이 움직일수록 범위가 넓어집니다.</dd></div>
     </dl></section>
     <section><h4>조작 방법</h4><dl>
@@ -291,7 +298,7 @@ function openWS(url, onMsg, onOpen, onClose){
   let ws, closed = false;
   const conn = () => {
     ws = new WebSocket(url);
-    ws.onopen = () => onOpen && onOpen();
+    ws.onopen = () => onOpen && onOpen(ws);
     ws.onmessage = ev => { try { onMsg(JSON.parse(ev.data)); } catch (e){ console.error(e); } };
     ws.onclose = () => { if (closed) return; onClose && onClose(); setTimeout(conn, 2000); };
     ws.onerror = () => ws.close();
@@ -1136,6 +1143,38 @@ openWS(`wss://fstream.binance.com/public/stream?streams=${sym}@depth@100ms`, m =
 openWS(`wss://stream.binance.com:9443/ws/${sym}@depth@100ms`, d => spotBook.handle(d), () => spotBook.resync());
 changeInterval(ST.interval).then(initLiq);
 setInterval(pollOI, 15000);
+
+/* ---------------- 상단 시세: 테더 원화 가격, 코인베이스 프리미엄 ---------------- */
+let usdtKrw = null, cbPrice = null;
+async function pollUsdtKrw(){
+  try { const r = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-USDT'); if (r.ok){ const j = await r.json(); if (j[0]){ usdtKrw = +j[0].trade_price; return; } } } catch (e){}
+  try { const r = await fetch('https://api.bithumb.com/public/ticker/USDT_KRW'); if (r.ok){ const j = await r.json(); usdtKrw = +j.data.closing_price; } } catch (e){}   // 업비트가 안 되면 빗썸
+}
+pollUsdtKrw(); setInterval(pollUsdtKrw, 5000);
+// 코인베이스 BTC-USD: 웹소켓으로 실시간, 끊겼을 때를 대비해 10초마다 REST로도 확인
+let cbWsAt = 0;
+openWS('wss://ws-feed.exchange.coinbase.com', m => { if (m.type === 'ticker' && m.product_id === 'BTC-USD' && +m.price){ cbPrice = +m.price; cbWsAt = Date.now(); } },
+  ws => ws.send(JSON.stringify({ type:'subscribe', product_ids:['BTC-USD'], channels:['ticker'] })));
+async function pollCb(){
+  if (Date.now() - cbWsAt < 15000) return;
+  try { const r = await fetch('https://api.exchange.coinbase.com/products/BTC-USD/ticker'); if (r.ok){ const j = await r.json(); if (+j.price) cbPrice = +j.price; } } catch (e){}
+}
+pollCb(); setInterval(pollCb, 10000);
+function binanceSpotMid(){   // 바이낸스 현물 호가 중간값 (없으면 선물 현재가)
+  if (!spotBook.ready) return lastPrice;
+  let bb = -Infinity, ba = Infinity;
+  for (const p of spotBook.bids.keys()) if (p > bb) bb = p;
+  for (const p of spotBook.asks.keys()) if (p < ba) ba = p;
+  return isFinite(bb) && isFinite(ba) && ba > bb ? (bb + ba) / 2 : lastPrice;
+}
+setInterval(() => {
+  $('mkUsdt').innerHTML = usdtKrw ? `USDT <b>₩${usdtKrw.toLocaleString('ko-KR', { maximumFractionDigits:1 })}</b>` : 'USDT ₩—';
+  const ref = binanceSpotMid();
+  if (cbPrice && ref){
+    const d = cbPrice - ref, pc = d / ref * 100, cls = d >= 0 ? 'up' : 'dn', sg = d >= 0 ? '+' : '−';
+    $('mkCb').innerHTML = `CB 프리미엄 <b class="${cls}">${sg}${Math.abs(pc).toFixed(3)}%</b> <span class="${cls}">(${sg}$${Math.abs(d).toFixed(1)})</span>`;
+  } else $('mkCb').textContent = 'CB 프리미엄 —';
+}, 1000);
 setInterval(() => futBook.merge(), 20000);
 setInterval(() => spotBook.merge(), 60000);
 setInterval(pruneLiq, 60000);
@@ -1264,7 +1303,7 @@ cv.addEventListener('pointermove', e => {
   }
   if (!ptrs.size && e.pointerType === 'mouse'){   // 마우스 모양: 제목줄은 위아래 화살표, 버튼은 손가락
     const q = posOf(e), h = paneAt(q), onTag = priceTag && q.x >= priceTag.x0 && q.x <= priceTag.x1 && q.y >= priceTag.y0 && q.y <= priceTag.y1;
-    const c = onTag ? 'copy' : h ? (h.act === 'head' ? 'ns-resize' : 'pointer') : 'grab';
+    const c = onTag ? 'pointer' : h ? (h.act === 'head' ? 'ns-resize' : 'pointer') : 'crosshair';   // 기본은 십자선, 누르는 버튼은 손가락
     if (cv.style.cursor !== c) cv.style.cursor = c;
   }
   if (!ptrs.has(e.pointerId)) return;
