@@ -68,7 +68,7 @@ footer.folded #status{margin-left:auto}
     <p><i class="sw" id="swL"></i>파란 띠는 롱 포지션 청산이 몰려 있을 것으로 추정되는 가격대, <i class="sw" id="swS"></i>빨간 띠는 숏 포지션 청산이 몰려 있을 것으로 추정되는 가격대이며, 색이 진할수록 규모가 큽니다.</p>
     <p>흐린 회색 띠는 가격이 이미 닿아 소진된 청산 물량으로, 띠 끝의 세로 눈금이 가격이 닿은 시점이며 시간이 지날수록 옅어지다 사라지는데, 규모가 큰 물량일수록 더 오래 남습니다. 호가는 가격이 움직일수록 확인된 범위가 점점 넓어집니다. ▼·▲ 삼각형은 실제로 체결된 롱·숏 청산입니다.</p>
     <p>매수·매도 쪽마다 가장 큰 매물벽 3개는 점선으로 표시되고, 2분 이상 유지되면 실선과 테두리로 바뀝니다. 유지 시간 앞의 ≥ 표시는 차트를 열기 전부터 있던 벽이라는 뜻입니다.</p>
-    <p>회색 취소선이 그어진 라벨은 가격이 닿기 전에 사라진 벽으로 스푸핑일 가능성이 있고, 노란 라벨은 가격이 닿아 체결된 벽입니다.</p>
+    <p>회색 "취소" 라벨은 가격이 닿기 전에 사라진 벽으로 스푸핑일 가능성이 있고, 노란 라벨은 가격이 닿아 체결된 벽입니다.</p>
     <p>차트에서 마우스 오른쪽 버튼을 누르거나 손가락으로 길게 누르면 분봉은 그대로 두고 봉 개수·구간·범위·최소 규모·확대 상태만 기본값으로 되돌리는 버튼이 나옵니다. 마우스 휠을 돌리면 커서 위치를 중심으로 가로·세로가 같은 비율로 확대·축소되고, Ctrl+휠은 가격축만 확대·축소합니다(터치 화면은 두 손가락으로 벌리거나 오므리기). 드래그로 상하좌우 이동합니다. 더블클릭하거나 두 번 탭하면 확대한 세로 비율은 유지한 채 현재가 중심으로 돌아오고, 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</p>
   </div>
   <span id="status">연결 중…</span>
@@ -83,6 +83,7 @@ const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
 const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+let autoHalf = 0, autoBucket = 0;
 let viewSpan = 1, viewPh = 1, viewSlot = 1, viewTop = 8, viewPlotW = 1, viewLo = 0, viewHi = 1;
 const THEMES = {
   dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#a3adb8', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
@@ -421,17 +422,23 @@ function render(){
   else {                                                   // 자동 맞춤: 보이는 캔들에 맞추고 현재가를 가운데로
     lo = ST.range ? P * (1 - ST.range / 100) : P; hi = ST.range ? P * (1 + ST.range / 100) : P;
     for (const c of vis){ if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; }
-    const half = Math.max(P - lo, hi - P, P * 0.0015) * 1.05;
-    lo = P - half; hi = P + half;
+    // 넓어질 땐 바로, 좁아질 땐 15% 이상 차이 날 때만 → 가격이 빨리 움직여도 눈금·매물대가 출렁이지 않게
+    const want = Math.max(P - lo, hi - P, P * 0.0015) * 1.05;
+    if (!autoHalf || want > autoHalf || want < autoHalf * 0.85) autoHalf = want;
+    lo = P - autoHalf; hi = P + autoHalf;
   }
   viewLo = lo; viewHi = hi; viewSpan = hi - lo; viewPh = ph; viewTop = top; viewPlotW = cw - 56;
   const y = p => top + (hi - p) / (hi - lo) * ph;
-  const autoB = nice((hi - lo) / 110), B = ST.bucket || autoB;
+  // 자동 구간도 이상적인 값이 지금의 절반 이하·두 배 가까이로 바뀔 때만 교체 (구간 크기가 왔다 갔다 하며 번쩍이는 것 방지)
+  { const ideal = (hi - lo) / 110; if (!autoBucket || ideal > autoBucket * 1.8 || ideal < autoBucket * 0.45) autoBucket = nice(ideal); }
+  const autoB = autoBucket, B = ST.bucket || autoB;
   { const a = $('autoOpt'), txt = `자동 ($${autoB})`; if (a.textContent !== txt) a.textContent = txt; }
   const dec = B < 1 ? 2 : B % 1 ? 1 : 0;
   const fp = x => x.toLocaleString('en-US', { minimumFractionDigits:dec, maximumFractionDigits:dec });
 
   const L = [];   // 숫자 라벨은 모아뒀다가 맨 마지막에 그림
+  const boxes = [];   // 차트 안 라벨들끼리 겹치지 않게 (x0, x1, y0, y1)
+  const hit = (x0, x1, y0, y1) => boxes.some(b => x0 < b[1] && x1 > b[0] && y0 < b[3] && y1 > b[2]);
   // 그리드
   const gs = nice((hi - lo) / 8);
   ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
@@ -526,18 +533,20 @@ function render(){
         if (r > 0.75){ ctx.fillStyle = col(o.side, 1, 1.2); ctx.fillRect(o.x0, y0, cw - o.x0, 1); ctx.fillRect(o.x0, y0 + h - 1, cw - o.x0, 1); }
       }
       arr.sort((a, b) => b.u - a.u);
-      const placed = ST.force ? [[0, 30]] : []; let n = 0;
+      let n = 0;
       for (const o of arr){
         if (n >= 6) break;
         const r = o.u / mx; if (r < 0.15) break;
         const fs = Math.round(9 + 7 * r), ym = y((o.k + .5) * B);
-        if (ym < top + fs || ym > bot - fs || overlaps(placed, ym - fs / 2 - 3, ym + fs / 2 + 3)) continue;
-        placed.push([ym - fs / 2 - 3, ym + fs / 2 + 3]); n++;
+        if (ym < top + fs || ym > bot - fs) continue;
         const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(o.k * B)}-${fp((o.k + 1) * B)}  ${fu(o.u)}`;
-        const lx = Math.min(o.x0 + 2, cw - 200);
+        const font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
+        ctx.font = font;
+        const tw = ctx.measureText(t).width, xr = cw * 0.75, x = Math.max(2, xr - tw - 8);   // 가로 3/4 지점에서 끝나게
+        if (hit(x, xr, ym - fs / 2 - 3, ym + fs / 2 + 3)) continue;
+        boxes.push([x, xr, ym - fs / 2 - 3, ym + fs / 2 + 3]); n++;
         L.push(() => {
-          ctx.textAlign = 'left'; ctx.font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
-          const tw = ctx.measureText(t).width, x = Math.max(2, Math.min(lx, cw - tw - 70));
+          ctx.textAlign = 'left'; ctx.font = font;
           ctx.fillStyle = T.lbg; ctx.fillRect(x, ym - fs / 2 - 2, tw + 8, fs + 4);
           ctx.fillStyle = liqText(o.side); ctx.fillText(t, x + 4, ym);
         });
@@ -656,21 +665,20 @@ function render(){
   }
   // 최근 사라진 큰 벽: 취소(가격이 안 닿았는데 사라짐 = 스푸핑 의심) / 체결(가격이 닿아서 소화됨)
   L.push(() => {
-    const placedG = [];
     ctx.textAlign = 'right'; ctx.font = '500 11px sans-serif';
     for (let i = ghosts.length - 1; i >= 0; i--){
       const g = ghosts[i], a = 1 - (now - g.t) / GHOST_MS;
       if (a <= 0 || g.B !== B) continue;
       const ym = y(g.pLo + g.B / 2);
-      if (ym < top + 8 || ym > bot - 8 || overlaps(placedG, ym - 8, ym + 8)) continue;
-      placedG.push([ym - 8, ym + 8]);
+      if (ym < top + 8 || ym > bot - 8) continue;
       const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
-      const tw = ctx.measureText(t).width, x = plotW - Math.max(40, slot * 4);   // 최근 캔들 4개쯤 왼쪽에서 끝나게
+      const tw = ctx.measureText(t).width, x = cw * 0.855;   // 화면 가로 85.5% 지점에서 끝나게 고정
+      if (hit(x - tw - 6, x + 2, ym - 8, ym + 8)) continue;
+      boxes.push([x - tw - 6, x + 2, ym - 8, ym + 8]);
       ctx.globalAlpha = Math.max(.25, a);
       ctx.fillStyle = T.lbg; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
       ctx.fillStyle = g.kind === '취소' ? T.ghost : T.ghostF;
       ctx.fillText(t, x - 2, ym);
-      if (g.kind === '취소'){ ctx.fillRect(x - tw - 2, ym, tw, 1); }
       ctx.globalAlpha = 1;
     }
   });
@@ -737,7 +745,7 @@ async function changeInterval(iv){
     const data = await fetchKlines(iv);
     if (req !== ivReq) return;                  // 그사이 다른 봉을 골랐으면 버림
     ST.interval = iv; setN(ST.dur / IV_MIN[iv], true);
-    ST.xOff = 0; ST.view = null; ST.span = null;
+    ST.xOff = 0; ST.view = null; ST.span = null; autoHalf = 0; autoBucket = 0;
     candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
     lastErr = '';
     startKlineWS();
@@ -761,7 +769,7 @@ setInterval(() => { if (dirty){ dirty = false; render(); } }, 250);
 setInterval(() => { dirty = true; }, 1000);
 new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 
-for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; } dirty = true; });
+for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; autoHalf = 0; autoBucket = 0; } dirty = true; });
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
 const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '4h':240 };
@@ -788,7 +796,7 @@ function redraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; depthC
 function resetView(){
   if (ST.view) ST.span = ST.view.hi - ST.view.lo;
   else if (ST.xOff < 0.5) ST.span = null;
-  ST.view = null; ST.xOff = 0; redraw();
+  ST.view = null; ST.xOff = 0; autoHalf = 0; autoBucket = 0; redraw();
 }
 const manual = () => { if (!ST.view){ ST.view = { lo:viewLo, hi:viewHi }; ST.span = null; } return ST.view; };
 const posOf = e => { const r = cv.getBoundingClientRect(); return { x:e.clientX - r.left, y:e.clientY - r.top }; };
@@ -879,7 +887,7 @@ function chartDefaults(){
   ST.bucket = 0; $('bucket').value = '0';
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
-  ST.view = null; ST.span = null; ST.xOff = 0;
+  ST.view = null; ST.span = null; ST.xOff = 0; autoHalf = 0; autoBucket = 0;
   depthCache = null; redraw();
 }
 const menu = $('ctx');
