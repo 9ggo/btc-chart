@@ -91,7 +91,7 @@ const THEMES = {
            ghost:'#a5adb8', ghostF:'#e3b341', hint:'#58a6ff', price:'#e3b341', priceTxt:'#0d1117', spotB:'rgba(38,166,154,.4)', spotA:'rgba(239,83,80,.4)' },
   light: { bg:'#c9cfd5', grid:'#b9c0c7', mute:'#2f363d', line:'#a3abb4', lbg:'rgba(214,219,224,.92)', ink:'#3a4148', inkS:'#111418',
            bidS:'#0a8f6c', askS:'#cf222e', bidLn:'10,143,108', askLn:'207,34,46', mark:'#1f2328', sumTxt:'#7d5600', sumLn:'#bf8700',
-           ghost:'#6e7781', ghostF:'#9a6700', hint:'#0969da', price:'#d4a72c', priceTxt:'#1f2328', spotB:'rgba(38,166,154,.55)', spotA:'rgba(239,83,80,.55)' }
+           ghost:'#6e7781', ghostF:'#9a6700', hint:'#0969da', price:'#8a5a00', priceTxt:'#ffffff', spotB:'rgba(38,166,154,.55)', spotA:'rgba(239,83,80,.55)' }
 };
 // 히트맵 팔레트: [위치, [R,G,B]] 구간. L = 롱 청산(아래), S = 숏 청산(위). 한 가지만 있으면 양쪽 공통.
 const PALS = {
@@ -696,7 +696,7 @@ function render(){
 
   // 현재가
   const yp = y(P);
-  ctx.strokeStyle = T.price; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = T.price; ctx.lineWidth = ST.theme === 'light' ? 1.6 : 1; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
   if (ST.view || ST.span || ST.xOff >= 0.5) L.push(() => {
     const t = ST.view || ST.xOff >= 0.5 ? '이동·확대 중 · 두 번 탭/더블클릭으로 현재가 복귀' : '확대 비율 유지 중 · 한 번 더 두 번 탭/더블클릭하면 자동 맞춤';
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right';
