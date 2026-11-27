@@ -898,6 +898,14 @@ function render(){
     let info = '', lo2 = 0, hi2 = 1, fmt = v => fu(Math.abs(v)).replace('$', v < 0 ? '-$' : '$');
     const at = arr => hIdx >= 0 && arr[hIdx] != null ? arr[hIdx] : arr[arr.length - 1];   // 커서가 있으면 그 봉의 값
     const Y = v => bot2 - (v - lo2) / (hi2 - lo2 || 1) * (bot2 - top2 - 3);
+    // 패널이 충분히 높으면 가로 눈금선(그래프 뒤)과 참고 숫자 — 각 지표의 범위를 정한 직후, 그래프보다 먼저 그림
+    const ph2 = bot2 - top2, yt = [];
+    const grid = () => {
+      if (pn.id === 'rsi'){ const st = ph2 >= 120 ? 10 : ph2 >= 70 ? 20 : 0; if (st) for (let v = st; v < 100; v += st) yt.push(v); }
+      else if (ph2 >= 60 && hi2 > lo2){ const st = nice((hi2 - lo2) / Math.floor(ph2 / 30)); for (let v = Math.ceil(lo2 / st) * st; v <= hi2; v += st) yt.push(v); }
+      ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
+      for (const v of yt){ const yy = Math.round(Y(v)) + .5; if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke(); }
+    };
     const line = (pts, col, w = 1.3) => {   // pts: [x, v]
       ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); let lx = -9, started = false;
       for (const [x, v] of pts){ if (started && Math.abs(x - lx) < 1) continue; const yy = Y(v); if (!started){ ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy); lx = x; }
@@ -913,7 +921,7 @@ function render(){
           if (lc && lc.px === px){ lc.v += c.qv; lc.net += c.c >= c.o ? c.qv : -c.qv; lc.up = lc.net >= 0; }
           else cols.push({ px, x:px + 1, v:c.qv, net:c.c >= c.o ? c.qv : -c.qv, up:c.c >= c.o, w:1.5 }); }
       });
-      lo2 = 0; hi2 = Math.max(1e-9, ...cols.map(c => c.v));
+      lo2 = 0; hi2 = Math.max(1e-9, ...cols.map(c => c.v)); grid();
       for (const c of cols){ ctx.fillStyle = c.up ? 'rgba(38,166,154,.6)' : 'rgba(239,83,80,.6)'; const yy = Y(c.v); ctx.fillRect(c.x - c.w / 2, yy, c.w, bot2 - yy); }
       const vc = hIdx >= 0 ? vis[hIdx] : vis[vis.length - 1]; info = vc ? fu(vc.qv) : '';
     } else if (pn.id === 'rsi'){
@@ -926,7 +934,7 @@ function render(){
         else { ag = (ag * 13 + g) / 14; al = (al * 13 + l) / 14; }
         if (i >= startI && n0 >= 14){ const r = al === 0 ? 100 : 100 - 100 / (1 + ag / al); pts.push([xOf(i - startI), r]); rArr[i - startI] = r; }
       }
-      lo2 = 0; hi2 = 100;
+      lo2 = 0; hi2 = 100; grid();
       ctx.setLineDash([3, 3]); ctx.strokeStyle = T.mute; ctx.globalAlpha = .6;
       for (const lv of [30, 70]){ ctx.beginPath(); ctx.moveTo(0, Y(lv)); ctx.lineTo(cw, Y(lv)); ctx.stroke(); }
       ctx.setLineDash([]); ctx.globalAlpha = 1;
@@ -951,7 +959,7 @@ function render(){
       // 미결제약정: 바이낸스 OI 기록(봉 간격에 맞춘 주기) + 15초마다 받는 실시간 값
       const t1 = vis[vis.length - 1].t + tStep, pts = oiHist.filter(o => o.t >= t0 - tStep * 2 && o.t <= t1 + tStep).map(o => [Math.min(cw, (off + (o.t - t0) / tStep) * slot + slot / 2), o.v]);
       if (pts.length){
-        lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad;
+        lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad; grid();
         line(pts, '#d18b00', 1.5);
         let b = pts[pts.length - 1][1];
         if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht); if (pr.length) b = pr[pr.length - 1].v; }
@@ -961,17 +969,11 @@ function render(){
       // CVD: 화면 왼쪽 끝부터 누적한 (시장가 매수 - 시장가 매도) 거래량
       let cum = 0; const pts = [], cArr = [];
       vis.forEach((c, i) => { cum += 2 * (c.tq || 0) - (c.qv || 0); pts.push([xOf(i), cum]); cArr[i] = cum; });
-      lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad;
+      lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad; grid();
       ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1;
       line(pts, '#1f77d0', 1.5);
       { const v = at(cArr); info = (v >= 0 ? '+' : '') + fmt(v); }
     }
-    // 패널이 충분히 높으면 가로 눈금선과 참고 숫자 추가
-    const ph2 = bot2 - top2, yt = [];
-    if (pn.id === 'rsi'){ const st = ph2 >= 120 ? 10 : ph2 >= 70 ? 20 : 0; if (st) for (let v = st; v < 100; v += st) yt.push(v); }
-    else if (ph2 >= 60 && hi2 > lo2){ const st = nice((hi2 - lo2) / Math.floor(ph2 / 30)); for (let v = Math.ceil(lo2 / st) * st; v <= hi2; v += st) yt.push(v); }
-    ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
-    for (const v of yt){ const yy = Math.round(Y(v)) + .5; if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke(); }
     ctx.restore();
     // 오른쪽 축 값과 제목줄의 현재 값
     ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
