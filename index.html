@@ -19,6 +19,11 @@ body{display:flex;flex-direction:column}
 .ctxmenu button:hover,.ctxmenu button:focus-visible{background:var(--btn2)}
 header .ref{padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:700;color:var(--ink);text-decoration:none;background:var(--btn)}
 header .ref:hover{background:var(--btn2)}
+/* 레퍼럴 링크 두 개를 같은 자리에 겹쳐 두고 5초마다 짧게 페이드로 교체 */
+header .ref-rot{display:inline-grid}
+header .ref-rot .ref{grid-area:1/1;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s ease}
+header .ref-rot .ref.on{opacity:1;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){header .ref-rot .ref{transition:none}}
 header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
 .switch{position:relative;cursor:pointer;gap:6px}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -66,7 +71,7 @@ footer.folded{display:none}
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="0.5" value="0" style="width:64px">M</label>
   <div class="right">
-    <a class="ref" href="https://www.okx.com/join/JOUFKKAL" target="_blank" rel="noopener">Join OKX</a>
+    <span class="ref-rot"><a class="ref on" href="https://www.okx.com/join/JOUFKKAL" target="_blank" rel="noopener">Join OKX</a><a class="ref" href="https://www.gate.com/signup/XRWNFFZKLF?ref_type=103" target="_blank" rel="noopener" tabindex="-1">Join Gate</a></span>
     <label class="switch"><span>다크</span><input id="theme" type="checkbox" role="switch" aria-label="라이트 모드"><i></i><span>라이트</span></label>
     <button id="reset" type="button">설정 초기화</button>
   </div>
@@ -1300,6 +1305,14 @@ const ICON_NOW = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="t
 const ICON_RESET = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 3a5 5 0 1 1-4.6 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.6 2.6l1.9 3.9 3.8-1.9z" fill="currentColor"/></svg>';
 cv.addEventListener('contextmenu', e => e.preventDefault());   // 차트 위 우클릭 시 브라우저 메뉴 안 뜨게
 $('toNow').addEventListener('click', () => { if ($('toNow').dataset.mode === 'now') resetView(); else chartDefaults(); });
+{ // 레퍼럴 링크 5초마다 교체
+  const refs = [...document.querySelectorAll('.ref-rot .ref')]; let ri = 0;
+  setInterval(() => {
+    refs[ri].classList.remove('on'); refs[ri].tabIndex = -1;
+    ri = (ri + 1) % refs.length;
+    refs[ri].classList.add('on'); refs[ri].tabIndex = 0;
+  }, 5000);
+}
 $('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
 // 설정 초기화: 모든 선택을 기본값으로
 $('reset').addEventListener('click', () => {
