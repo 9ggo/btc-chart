@@ -601,11 +601,11 @@ function render(){
       ctx.fillStyle = g.long ? '#ffb000' : '#d17bff'; ctx.fill();
       if (s > 4){ ctx.strokeStyle = T.mark; ctx.lineWidth = 0.5; ctx.stroke(); ctx.lineWidth = 1; }
     }
-    // 금액 글자: $10만 이상, 삼각형이 충분히 클 때만, 큰 금액부터 겹치지 않게 맨 앞에 그림
-    if (k >= 0.3){
+    // 금액 글자: 삼각형이 너무 작지 않을 때, 큰 금액부터 겹치지 않게 맨 앞에 그림
+    {
       ctx.font = '700 10px sans-serif';
       for (const g of [...list].reverse()){
-        if (g.usd < 1e5) break;
+        if (g.usd < 1e3) break;   // $1K 이상은 모두 표시 (겹치면 작은 금액부터 생략)
         const x = xOf(g.i), yy = y(g.pu / g.usd);
         const s = Math.max(2.5, Math.min(18, Math.max(7, Math.sqrt(g.usd / 3e3))) * k);
         const ty = g.long ? yy - s - 7 : yy + s + 8, txt = fu(g.usd), tw = ctx.measureText(txt).width;
