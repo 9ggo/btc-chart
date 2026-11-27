@@ -99,13 +99,13 @@ footer.folded{display:none}
       <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다.</dd></div>
       <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
       <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 오르면 매수 우위입니다.</dd></div>
-      <div class="row"><dt>USDT ₩</dt><dd>업비트의 테더 원화 가격입니다. 업비트에 연결되지 않으면 빗썸 가격을 씁니다.</dd></div>
+      <div class="row"><dt>USDT ₩</dt><dd>업비트의 테더 원화 가격입니다. 업비트 연결이 끊기면 빗썸 가격을 씁니다.</dd></div>
       <div class="row"><dt>CB 프리미엄</dt><dd>코인베이스 BTC-USD 가격이 바이낸스 현물 BTCUSDT보다 얼마나 비싼지(+) 싼지(−)입니다. 미국 쪽 매수세가 강하면 +로 커지는 경향이 있습니다.</dd></div>
       <div class="row"><dt>호가 데이터 끝</dt><dd>지금까지 확인된 호가 범위의 끝입니다. 가격이 움직일수록 범위가 넓어집니다.</dd></div>
     </dl></section>
     <section><h4>조작 방법</h4><dl>
       <div class="row"><dt>커서 올리기 · 탭</dt><dd>그 시점 봉의 시가·고가·저가·종가와 각 지표 값, 커서 높이의 가격이 표시됩니다.</dd></div>
-      <div class="row"><dt>가격표 +</dt><dd>십자선 오른쪽 끝 가격표의 + 를 누르면 그 가격이 복사됩니다. 가격표 위에 마우스가 있는 동안은 차트가 위아래로 움직이지 않습니다.</dd></div>
+      <div class="row"><dt>가격표 +</dt><dd>십자선 오른쪽 끝 가격표의 + 를 누르면 그 가격이 복사됩니다. + 위에 마우스가 있는 동안은 차트가 위아래로 움직이지 않습니다.</dd></div>
       <div class="row"><dt>휠</dt><dd>현재가가 가운데 고정된 상태에서는 커서 위치를 기준으로 시간축을 확대·축소하고 현재가는 가운데에 그대로 둡니다. 드래그로 옮긴 뒤에는 커서 위치를 기준으로 확대·축소합니다.</dd></div>
       <div class="row"><dt>Ctrl + 휠</dt><dd>가격축만 확대·축소합니다.</dd></div>
       <div class="row"><dt>드래그</dt><dd>차트를 상하좌우로 옮깁니다.</dd></div>
@@ -1146,11 +1146,19 @@ setInterval(pollOI, 15000);
 
 /* ---------------- 상단 시세: 테더 원화 가격, 코인베이스 프리미엄 ---------------- */
 let usdtKrw = null, cbPrice = null;
-async function pollUsdtKrw(){
-  try { const r = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-USDT'); if (r.ok){ const j = await r.json(); if (j[0]){ usdtKrw = +j[0].trade_price; return; } } } catch (e){}
-  try { const r = await fetch('https://api.bithumb.com/public/ticker/USDT_KRW'); if (r.ok){ const j = await r.json(); usdtKrw = +j.data.closing_price; } } catch (e){}   // 업비트가 안 되면 빗썸
-}
-pollUsdtKrw(); setInterval(pollUsdtKrw, 5000);
+// 테더 원화: 업비트 웹소켓(브라우저에서 바로 받을 수 있음), 업비트가 30초 넘게 조용하면 빗썸 웹소켓 값 사용
+let upbitAt = 0;
+(function upbit(){
+  let ws;
+  try { ws = new WebSocket('wss://api.upbit.com/websocket/v1'); } catch (e){ setTimeout(upbit, 5000); return; }
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => ws.send(JSON.stringify([{ ticket:'btc-chart' }, { type:'ticker', codes:['KRW-USDT'] }]));
+  ws.onmessage = ev => { try { const j = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data)); if (j.trade_price){ usdtKrw = +j.trade_price; upbitAt = Date.now(); } } catch (e){} };
+  ws.onclose = () => setTimeout(upbit, 3000); ws.onerror = () => ws.close();
+})();
+openWS('wss://pubwss.bithumb.com/pub/ws', m => {
+  const c = m && m.content; if (c && c.symbol === 'USDT_KRW' && +c.closePrice && Date.now() - upbitAt > 30000) usdtKrw = +c.closePrice;
+}, ws => ws.send(JSON.stringify({ type:'ticker', symbols:['USDT_KRW'], tickTypes:['24H'] })));
 // 코인베이스 BTC-USD: 웹소켓으로 실시간, 끊겼을 때를 대비해 10초마다 REST로도 확인
 let cbWsAt = 0;
 openWS('wss://ws-feed.exchange.coinbase.com', m => { if (m.type === 'ticker' && m.product_id === 'BTC-USD' && +m.price){ cbPrice = +m.price; cbWsAt = Date.now(); } },
@@ -1297,7 +1305,7 @@ cv.addEventListener('pointermove', e => {
   }
   if (e.pointerType === 'mouse'){
     const p = posOf(e);
-    const onBox = !ptrs.size && priceBox && p.x >= priceBox.x0 && p.x <= priceBox.x1 && p.y >= priceBox.y0 && p.y <= priceBox.y1;
+    const onBox = !ptrs.size && priceTag && p.x >= priceTag.x0 - 2 && p.x <= priceTag.x1 + 2 && p.y >= priceTag.y0 - 2 && p.y <= priceTag.y1 + 2;   // + 버튼 위에서만 고정 (숫자 위에서는 고정 안 함)
     if (onBox && !freezeY) freezeY = { lo:viewLo, hi:viewHi }; else if (!onBox) freezeY = null;
     hover = p.x <= viewPlotW + 56 ? p : null; redraw();
   }
