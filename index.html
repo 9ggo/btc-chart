@@ -97,7 +97,7 @@ footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12
       <div class="row"><dt>두 손가락 (터치)</dt><dd>가로로 벌리면 시간축, 세로로 벌리면 가격축을 확대·축소합니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</dd></div>
       <div class="row"><dt>지표 제목줄</dt><dd>위아래로 끌면 높이가 바뀝니다. 오른쪽 ▲ ▼로 순서를 바꾸고, ▾ ▸로 접거나 펼칩니다.</dd></div>
-      <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드와 설명 접기 상태를 뺀 모든 설정을 기본값으로 되돌립니다. 지표는 거래량·RSI·OI·CVD 순서, 높이 3:3:2:2로 돌아갑니다.</dd></div>
+      <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드와 설명 접기 상태를 뺀 모든 설정을 기본값으로 되돌립니다. 지표는 거래량·RSI·OI·CVD 순서, 높이 75:75:45:45로 돌아갑니다.</dd></div>
     </dl></section>
   </div>
   <div class="foot-r"><button id="legendBtn" type="button">설명 접기</button><span id="status">연결 중…</span></div>
@@ -114,7 +114,7 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
 // 하단 지표 패널: 순서·접힘·높이 (브라우저에 기억)
-const PANE_DEF = () => [{ id:'vol', open:true, h:62 }, { id:'rsi', open:true, h:62 }, { id:'oi', open:true, h:42 }, { id:'cvd', open:true, h:42 }];   // 실제 그래프 높이(패널-2px) 60:60:40:40 = 3:3:2:2
+const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'oi', open:true, h:47 }, { id:'cvd', open:true, h:47 }];   // 실제 그래프 높이(패널-2px) 75:75:45:45
 const PANE_NAME = { vol:'거래량', rsi:'RSI 14', oi:'미결제약정 OI', cvd:'CVD' };
 let panes = PANE_DEF();
 try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
