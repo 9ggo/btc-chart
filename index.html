@@ -407,7 +407,8 @@ function render(){
     ctx.fillStyle = T.mute; ctx.font = '14px sans-serif'; ctx.fillText('데이터 불러오는 중…', 16, 30); return;
   }
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
-  const cw = W - panelW, top = 8, bot = H - 8, ph = bot - top;
+  const AX = 22;   // 하단 시간축 높이
+  const cw = W - panelW, top = 8, bot = H - AX - 4, ph = bot - top;
   ST.xOff = Math.max(0, Math.min(ST.xOff, candles.length - 4));
   const whole = Math.floor(ST.xOff), frac = ST.xOff - whole;   // 소수 부분만큼 부드럽게 밀어서 그림
   const endIdx = candles.length - whole;
@@ -443,6 +444,32 @@ function render(){
   const xOf = i => (off + i) * slot + slot / 2;
   const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
   const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
+
+  // 하단 시간축: 라벨 간격이 약 90px 이상 되도록 보기 좋은 시간 단위를 고름 (현지 시간 기준)
+  {
+    const tz = -new Date().getTimezoneOffset() * 60000, M = 60000;
+    const steps = [1, 5, 15, 30, 60, 120, 240, 360, 720, 1440, 2880, 10080].map(m => m * M);
+    const step = steps.find(st => st >= tStep && st / tStep * slot >= 90) || steps[steps.length - 1];
+    const ticks = [];
+    let prevDay = null;
+    for (let i = 0; i < vis.length; i++){
+      const t = vis[i].t;
+      if ((t + tz) % step !== 0) continue;
+      const x = xOf(i); if (x < 0 || x > plotW) continue;
+      const d = new Date(t), day = d.getMonth() * 40 + d.getDate();
+      const newDay = (t + tz) % 86400000 === 0 || step >= 86400000;
+      const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      ticks.push({ x, txt:newDay ? `${d.getMonth() + 1}/${d.getDate()}` : hm, bold:newDay });
+      prevDay = day;
+      ctx.strokeStyle = T.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, top); ctx.lineTo(Math.round(x) + .5, bot); ctx.stroke();
+    }
+    L.push(() => {
+      ctx.fillStyle = T.bg; ctx.fillRect(0, bot + 1, cw, H - bot);
+      ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, bot + .5); ctx.lineTo(cw, bot + .5); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (const k of ticks){ ctx.font = `${k.bold ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold ? T.inkS : T.mute; ctx.fillText(k.txt, k.x, bot + AX / 2 + 2); }
+    });
+  }
 
   // 청산 추정 띠: 생긴 시점부터 오른쪽으로 뻗고, 가격이 닿은 부분은 그 시점에서 끊기고 옅어짐
   if (ST.liq && liqReady){
