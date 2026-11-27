@@ -46,11 +46,10 @@ footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);backgrou
 .legend dd{margin:0}
 .legend .sw{margin-right:3px}
 @media (max-width:600px){.legend .row{grid-template-columns:1fr;gap:0}}
-footer.folded .legend{display:none}
-footer.folded{align-items:center}
-footer.folded .foot-r{margin-left:auto}
-footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12px}
-#legendBtn{font-size:14px;padding:7px 16px;border-radius:8px}
+footer.folded{display:none}
+/* 설명 버튼·시계: 맨 아래 지표 옆(시간축 오른쪽 빈칸)에 겹쳐 둠 */
+#wrap .foot-r{position:absolute;z-index:4;right:8px;bottom:4px;height:26px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
+#legendBtn{font-size:13px;padding:3px 12px;border-radius:7px}
 #status{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:3px}
 #status.err{color:#ff7b72}
@@ -69,7 +68,7 @@ footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12
     <button id="reset" type="button">설정 초기화</button>
   </div>
 </header>
-<div id="wrap"><canvas id="cv"></canvas><button id="toNow" type="button" hidden></button></div>
+<div id="wrap"><canvas id="cv"></canvas><div class="foot-r"><button id="legendBtn" type="button">설명 접기</button><span id="status">연결 중…</span></div><button id="toNow" type="button" hidden></button></div>
 <footer id="foot">
   <div class="legend">
     <section><h4>화면 구성</h4><dl>
@@ -100,7 +99,6 @@ footer .foot-r{flex:none;margin-left:auto;display:flex;align-items:center;gap:12
       <div class="row"><dt>설정 초기화</dt><dd>다크/라이트 모드와 설명 접기 상태를 뺀 모든 설정을 기본값으로 되돌립니다. 지표는 거래량·RSI·OI·CVD 순서, 높이 75:75:45:45로 돌아갑니다.</dd></div>
     </dl></section>
   </div>
-  <div class="foot-r"><button id="legendBtn" type="button">설명 접기</button><span id="status">연결 중…</span></div>
 </footer>
 
 <script>
@@ -988,7 +986,7 @@ function render(){
     // 커서가 가리키는 봉: 그 값의 높이에 작은 점, 커서가 이 지표 안에 있을 때만 옆에 숫자
     if (hv != null && hTxt){
       const hx = xOf(hIdx), vy = Math.max(top2 + 7, Math.min(bot2 - 7, Y(pn.id === 'vol' ? hv : hv)));
-      ctx.beginPath(); ctx.arc(hx, vy, 2, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, vy, 1.5, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();
       if (hover.y >= top2 && hover.y <= bot2 + 2){
       ctx.font = '700 11px sans-serif'; const tw = ctx.measureText(hTxt).width;
       const right = hx + 8 + tw + 8 <= cw, bx = right ? hx + 8 : hx - 8 - tw - 8;
