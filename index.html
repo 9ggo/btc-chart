@@ -1154,8 +1154,10 @@ async function changeInterval(iv){
   try {
     const data = await fetchKlines(iv);
     if (req !== ivReq) return;                  // 그사이 다른 봉을 골랐으면 버림
+    const ivRatio = IV_MIN[ST.interval] / IV_MIN[iv];   // 옛 봉 길이 / 새 봉 길이 → 보던 시간 위치 그대로 옮김
     ST.interval = iv; noMoreOlder = false; setN(Math.max(ST.dur / IV_MIN[iv], LONG_MIN[iv] || 0), true);   // 일봉 이상은 기간을 맞추면 봉이 너무 적어서 최소 개수 보장
-    ST.xOff = 0; ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0;
+    // 세로로 늘리거나 옮긴 범위(view·span)는 그대로 유지, 가로 이동은 같은 시점이 보이게 환산
+    ST.xOff = ST.xOff * ivRatio; autoHalf = 0; autoBucket = 0;
     candles = data; if (candles.length) lastPrice = candles[candles.length - 1].c;
     lastErr = ''; oiHist = []; loadOI(iv);
     startKlineWS();
