@@ -50,7 +50,7 @@ footer.folded #status{margin-left:auto}
 <body>
 <header>
   <b>BTCUSDT Perpetual</b>
-  <label>봉 <select id="interval"><option>1m</option><option selected>5m</option><option>15m</option><option>1h</option><option>4h</option></select></label>
+  <label>봉 <select id="interval"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option><option>1h</option><option>4h</option></select></label>
   <label>봉 개수 <select id="n"></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
@@ -667,7 +667,7 @@ function render(){
       if (ym < top + 8 || ym > bot - 8 || overlaps(placedG, ym - 8, ym + 8)) continue;
       placedG.push([ym - 8, ym + 8]);
       const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
-      const tw = ctx.measureText(t).width, x = cw - 60;
+      const tw = ctx.measureText(t).width, x = plotW - Math.max(70, slot * 8);   // 최근 캔들을 가리지 않게 살짝 왼쪽
       ctx.globalAlpha = Math.max(.25, a);
       ctx.fillStyle = T.lbg; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
       ctx.fillStyle = g.kind === '취소' ? T.ghost : T.ghostF;
@@ -744,7 +744,7 @@ new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; } dirty = true; });
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
-const IV_MIN = { '1m':1, '5m':5, '15m':15, '1h':60, '4h':240 };
+const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '4h':240 };
 const N_OPTS = [15, 30, 60, 90, 120, 180, 240, 300, 500, 900];
 let nHtml = '';
 function setN(n, keepDur){
