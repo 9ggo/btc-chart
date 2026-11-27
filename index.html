@@ -724,7 +724,10 @@ function render(){
         if (SPR){ const nb = d => (act.get(o.side + (o.k + d)) || { u:0 }).u; if (nb(-1) > o.u || nb(1) > o.u || nb(-2) > o.u || nb(2) > o.u) continue; }   // 퍼짐일 땐 봉우리(주변보다 큰 곳)에만 라벨
         const fs = Math.round(9 + 7 * r), ym = y((o.k + .5) * B);
         if (ym < top + fs || ym > bot - fs) continue;
-        const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(o.k * B)}-${fp((o.k + 1) * B)}  ${fu(o.u)}`;
+        // 퍼짐일 땐 봉우리 ±퍼짐폭 안의 합을 표시 → 그 가격대 전체 규모 (한 칸 몫만 보이면 퍼질수록 작아져 보임)
+        let kA = o.k, kB = o.k, su = o.u;
+        if (SPR){ const m = Math.max(1, Math.round(o.k * SPR)); kA = o.k - m; kB = o.k + m; su = 0; for (let k = kA; k <= kB; k++) su += (act.get(o.side + k) || { u:0 }).u; }
+        const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(kA * B)}-${fp((kB + 1) * B)}  ${fu(su)}`;
         const font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
         ctx.font = font;
         const tw = ctx.measureText(t).width, xr = cw * 0.75, x = Math.max(2, xr - tw - 8);   // 가로 3/4 지점에서 끝나게
