@@ -796,7 +796,7 @@ cv.addEventListener('pointermove', e => {
 function endPtr(e){
   ptrs.delete(e.pointerId);
   if (pinch){ if (ptrs.size < 2){ pinch = null; drag = null; lastTap.t = 0; } return; }
-  if (drag && !drag.moved && e.type === 'pointerup'){
+  if (drag && !drag.moved && e.type === 'pointerup' && e.pointerType !== 'mouse'){   // 마우스는 dblclick 이벤트가 따로 처리
     const now = Date.now();
     if (now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30){ resetView(); lastTap.t = 0; }
     else lastTap = { t:now, x:e.clientX, y:e.clientY };
