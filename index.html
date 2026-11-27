@@ -1427,7 +1427,7 @@ function applyLook(){
   $('swL').style.background = heat('L', 1, 1); $('swS').style.background = heat('S', 1, 1);
   dirty = true;
 }
-ST.spread = ['0','0.05','0.1','0.2'].includes(store.get('btcSpread')) ? +store.get('btcSpread') : 0.1;   // 기본 ±0.1%
+ST.spread = ['0','0.05','0.1','0.2'].includes(store.get('btcSpread')) ? +store.get('btcSpread') : 0.05;   // 기본 ±0.05%
 $('spread').value = String(ST.spread);
 $('spread').addEventListener('change', e => { ST.spread = +e.target.value; store.set('btcSpread', e.target.value); dirty = true; });
 ST.theme = store.get('btcTheme') === 'dark' ? 'dark' : 'light';   // 기본은 라이트 모드
@@ -1486,6 +1486,7 @@ $('reset').addEventListener('click', () => {
   ST.bucket = 0; $('bucket').value = '0';
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
+  ST.spread = 0.05; $('spread').value = '0.05'; store.set('btcSpread', '0.05');
   ST.view = null; ST.span = null; ST.scaled = false; ST.xOff = 0;
   ST.dur = 900; $('interval').value = '5m';
   if (ST.interval !== '5m') changeInterval('5m'); else setN(180);
