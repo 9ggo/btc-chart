@@ -310,6 +310,17 @@ async function priceFallback(){
     sweepLiq(p, p); dirty = true;
   } catch (e){}
 }
+// 체결이 일어날 때마다 바로 현재가·현재 봉 반영 (캔들 스트림은 0.25초 간격이라 그 사이를 메움)
+function onTrade(d){
+  const p = +d.p, t = d.T, last = candles[candles.length - 1];
+  if (!p || !last || loadingIv) return;
+  const iv = IV_MIN[ST.interval] * 60000;
+  if (t >= last.t + iv){   // 새 봉 시작 (거래량은 곧 오는 캔들 데이터가 정확한 값으로 채움)
+    const nt = last.t + Math.floor((t - last.t) / iv) * iv;
+    candles.push({ t:nt, o:p, h:p, l:p, c:p, v:0, tb:0, qv:0, tq:0 });
+  } else if (t >= last.t){ last.c = p; if (p > last.h) last.h = p; if (p < last.l) last.l = p; }
+  lastPrice = p; sweepLiq(p, p); dirty = true;
+}
 function onKline(k){
   if (k.i && k.i !== ST.interval) return;   // 바꾸기 전 봉의 늦게 온 데이터는 무시
   lastKlineMsg = Date.now();
@@ -985,7 +996,7 @@ function render(){
     ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = hv != null ? T.hint : T.ink; ctx.fillText(hv != null ? hTxt : info, 16 + nameW, y0 + HDR / 2 + 1);
     // 커서가 가리키는 봉: 그 값의 높이에 작은 점, 커서가 이 지표 안에 있을 때만 옆에 숫자
     if (hv != null && hTxt){
-      const hx = xOf(hIdx), vy = Math.max(top2 + 7, Math.min(bot2 - 7, Y(pn.id === 'vol' ? hv : hv)));
+      const hx = Math.round(xOf(hIdx)) + .5, vy = Math.max(top2 + 7, Math.min(bot2 - 7, Y(hv)));   // 세로 점선과 같은 x
       ctx.beginPath(); ctx.arc(hx, vy, 1.5, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();
       if (hover.y >= top2 && hover.y <= bot2 + 2){
       ctx.font = '700 11px sans-serif'; const tw = ctx.measureText(hTxt).width;
@@ -1044,9 +1055,9 @@ let klineWS = null;
 function startKlineWS(){
   if (klineWS) klineWS.close();
   marketOpen = false;
-  klineWS = openWS(`wss://fstream.binance.com/market/stream?streams=${sym}@kline_${ST.interval}/!forceOrder@arr`, m => {
+  klineWS = openWS(`wss://fstream.binance.com/market/stream?streams=${sym}@kline_${ST.interval}/${sym}@aggTrade/!forceOrder@arr`, m => {
     const d = m.data; if (!d) return;
-    if (d.e === 'kline') onKline(d.k); else if (d.e === 'forceOrder') onForce(d.o);
+    if (d.e === 'aggTrade') onTrade(d); else if (d.e === 'kline') onKline(d.k); else if (d.e === 'forceOrder') onForce(d.o);
   }, () => { marketOpen = true; dirty = true; }, () => { marketOpen = false; dirty = true; });
 }
 // 봉 바꾸기: 새 데이터를 다 받은 뒤 한 번에 교체 → 받는 동안은 기존 차트를 그대로 보여줘서 화면이 번쩍이지 않음
@@ -1095,7 +1106,14 @@ setInterval(() => futBook.merge(), 20000);
 setInterval(() => spotBook.merge(), 60000);
 setInterval(pruneLiq, 60000);
 setInterval(priceFallback, 3000);
-setInterval(() => { if (dirty){ dirty = false; render(); } }, 250);
+// 화면 갱신: 바뀐 게 있으면 다음 화면 주사 때 바로 그림 (최대 초당 약 16번, 탭이 안 보이면 자동으로 쉼)
+let lastDraw = 0;
+function tick(ts){
+  const now = ts || performance.now();
+  if (dirty && now - lastDraw >= 60){ dirty = false; lastDraw = now; render(); }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
 setInterval(() => { dirty = true; }, 1000);
 new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 
