@@ -935,10 +935,12 @@ function render(){
       if (pts.length > 1){
         for (const [lv, col, above] of [[70, 'rgba(38,166,154,.45)', true], [30, 'rgba(239,83,80,.45)', false]]){
           ctx.save(); ctx.beginPath();
-          if (above) ctx.rect(0, top2, cw, Y(lv) - top2); else ctx.rect(0, Y(lv), cw, bot2 - Y(lv));
-          ctx.clip(); ctx.beginPath(); ctx.moveTo(pts[0][0], Y(lv));
+          // 기준선에 딱 붙는 1px 틈이 안 생기도록 경계를 1px 겹쳐서 채움
+          const yl = Y(lv), yc = above ? Math.ceil(yl) + 1 : Math.floor(yl) - 1;
+          if (above) ctx.rect(0, top2, cw, Math.ceil(yl) + 1 - top2); else ctx.rect(0, Math.floor(yl) - 1, cw, bot2 - Math.floor(yl) + 1);
+          ctx.clip(); ctx.beginPath(); ctx.moveTo(pts[0][0], yc);
           for (const [x, v] of pts) ctx.lineTo(x, Y(v));
-          ctx.lineTo(pts[pts.length - 1][0], Y(lv)); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
+          ctx.lineTo(pts[pts.length - 1][0], yc); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
         }
       }
       line(pts, '#8e5bd6');
@@ -1135,6 +1137,7 @@ function zoomAt(ft, fp, cx, cy, sync){
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   const f = Math.exp(e.deltaY * 0.0015), p = posOf(e);
+  if (p.y > viewTop + viewPh) p.y = viewTop + viewPh / 2;   // 지표 패널 위에서 돌려도 차트에서 돌린 것과 똑같이 (세로 기준은 차트 가운데)
   if (!ST.view){
     // 현재가가 가운데 고정된 상태: 가로만 커서 기준으로 확대·축소하고, 세로는 현재가를 가운데 둔 채 같은 비율로
     const span0 = ST.span || (viewHi - viewLo);
@@ -1175,7 +1178,7 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   if (paneDrag){
     const dy = e.clientY - paneDrag.y; if (Math.abs(dy) > 3) paneDrag.moved = true;
-    if (paneDrag.moved){ const p = panes.find(q => q.id === paneDrag.id); p.h = Math.max(30, Math.min(400, paneDrag.h0 - dy)); p.open = true; redraw(); }
+    if (paneDrag.moved){ const p = panes.find(q => q.id === paneDrag.id); if (p.open){ p.h = Math.max(30, Math.min(400, paneDrag.h0 - dy)); redraw(); } }   // 접힌 패널은 끌어도 그대로
     return;
   }
   if (e.pointerType === 'mouse'){ const p = posOf(e); hover = p.x <= viewPlotW + 56 ? p : null; redraw(); }
@@ -1188,7 +1191,8 @@ cv.addEventListener('pointermove', e => {
   if (pinch && ptrs.size === 2){   // 두 손가락: 손가락 사이 중심을 고정점으로, 가로 간격 = 시간축, 세로 간격 = 가격축
     const [a, b] = [...ptrs.values()];
     const dx = Math.max(20, Math.abs(a.x - b.x)), dy = Math.max(20, Math.abs(a.y - b.y));
-    zoomAt(pinch.useX ? pinch.dx / dx : 1, pinch.useY ? pinch.dy / dy : 1, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    const pcy = (a.y + b.y) / 2;
+    zoomAt(pinch.useX ? pinch.dx / dx : 1, pinch.useY ? pinch.dy / dy : 1, (a.x + b.x) / 2, pcy > viewTop + viewPh ? viewTop + viewPh / 2 : pcy);
     pinch.dx = dx; pinch.dy = dy; return;
   }
   if (!drag) return;
