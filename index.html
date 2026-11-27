@@ -73,7 +73,7 @@ footer.folded{display:none}
 <body>
 <header>
   <b title="바이낸스 USDⓈ-M 선물 BTCUSDT 무기한 계약">BINANCE:BTCUSDT.P</b>
-  <label>봉 <select id="interval"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option><option>1h</option><option>2h</option><option>4h</option><option>1d</option><option>1w</option><option value="1M">1M (월)</option><option value="1y">1y (년)</option></select></label>
+  <label>봉 <select id="interval"><option>1m</option><option>3m</option><option selected>5m</option><option>15m</option><option>1h</option><option>2h</option><option>4h</option><option>12h</option><option>1d</option><option>1w</option><option value="1M">1M (월)</option><option value="1y">1y (년)</option></select></label>
   <label>봉 개수 <select id="n"></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
   <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
@@ -145,7 +145,7 @@ let paneHits = [];
 let hover = null;
 let priceTag = null, priceBox = null, copiedAt = 0, freezeY = null;   // 가격표의 + 버튼(복사) / 가격표 전체 / 복사 시각 / 가격표 위에 있는 동안 고정할 세로 범위   // 커서(또는 탭) 위치 {x, y}: 그 시점의 시가·고가·저가·종가와 지표 값 표시      // 렌더할 때 채움: 제목줄·버튼 클릭 영역
 let oiHist = [];        // [{t, v}] 미결제약정(BTC)
-const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '2h':'2h', '4h':'4h', '1d':'1d', '1w':'1d', '1M':'1d', '1y':'1d' };
+const OI_PERIOD = { '1m':'5m', '3m':'5m', '5m':'5m', '15m':'15m', '1h':'1h', '2h':'2h', '4h':'4h', '12h':'12h', '1d':'1d', '1w':'1d', '1M':'1d', '1y':'1d' };
 async function loadOI(iv){
   try {
     const r = await fetch(`${FAPI}/futures/data/openInterestHist?symbol=${SYM}&period=${OI_PERIOD[iv] || '5m'}&limit=500`);
@@ -542,7 +542,7 @@ function render(){
   const axTop = H - AX;
   const cw = W - panelW, top = 8, bot = axTop - panesTotal - 4, ph = bot - top;
   { const b = $('toNow');
-    const isDefault = !ST.view && !ST.span && !ST.bucket && !ST.range && !ST.minQty && ST.n === Math.round(900 / IV_MIN[ST.interval]);
+    const isDefault = !ST.view && !ST.span && !ST.bucket && !ST.range && !ST.minQty && ST.n === Math.round(defN(ST.interval));
     const mode = ST.xOff >= 0.5 ? 'now' : isDefault ? '' : 'reset';
     const show = !!mode;
     if (b.dataset.mode !== mode){
@@ -1237,8 +1237,9 @@ new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = (+e.target.value || 0) * (id === 'minQty' ? 1e6 : 1); if (id === 'range'){ ST.view = null; ST.span = null; ST.scaled = false; autoHalf = 0; autoBucket = 0; } dirty = true; });
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
-const LONG_MIN = { '1d':90, '1w':52, '1M':36, '1y':8 };
-const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '2h':120, '4h':240, '1d':1440, '1w':10080, '1M':43830, '1y':525960 };   // 1M·1y는 평균 길이
+const defN = iv => Math.max(900 / IV_MIN[iv], LONG_MIN[iv] || 0);   // 기본 봉 개수: 15시간 분량, 긴 봉은 최소 개수
+const LONG_MIN = { '12h':60, '1d':90, '1w':52, '1M':36, '1y':8 };
+const IV_MIN = { '1m':1, '3m':3, '5m':5, '15m':15, '1h':60, '2h':120, '4h':240,'12h':720, '1d':1440, '1w':10080, '1M':43830, '1y':525960 };   // 1M·1y는 평균 길이
 const N_OPTS = [15, 30, 60, 90, 120, 180, 240, 300, 500, 900, 1500, 3000, 9000, 72000];
 let nHtml = '';
 function setN(n, keepDur){
@@ -1409,7 +1410,7 @@ setFold(store.get('btcFold') === '1');
 $('legendBtn').addEventListener('click', () => { const f = !$('foot').classList.contains('folded'); store.set('btcFold', f ? '1' : '0'); setFold(f); });
 // 우클릭 메뉴: 분봉은 그대로 두고 차트 관련 설정만 기본값으로
 function chartDefaults(){
-  ST.dur = 900; setN(900 / IV_MIN[ST.interval], true);   // 기본 기간(5분×180)에 맞는 봉 개수
+  ST.dur = 900; setN(defN(ST.interval), true);   // 기본 기간(5분×180)에 맞는 봉 개수
   ST.bucket = 0; $('bucket').value = '0';
   ST.range = 0; $('range').value = '0';
   ST.minQty = 0; $('minQty').value = '0';
