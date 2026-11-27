@@ -814,6 +814,19 @@ function render(){
       if (g && g.i === it.i && g.long === it.long && it.yy - g.yLast < 16){ g.pu += it.p * it.usd; g.usd += it.usd; g.yLast = it.yy; }
       else grp.push({ i:it.i, long:it.long, pu:it.p * it.usd, usd:it.usd, yLast:it.yy });
     }
+    // 줌아웃해서 캔들이 촘촘해지면 옆 캔들끼리도 합침: 같은 방향이고 화면상 가로 30px·세로 18px 안이면 큰 것 기준으로 묶음
+    if (slot < 30 && grp.length > 1){
+      const R = 30, cells = new Map(), out = [];
+      for (const g of grp.sort((a, b) => b.usd - a.usd)){
+        const x = xOf(g.i), yy = y(g.pu / g.usd), cx = Math.floor(x / R);
+        let hit = null;
+        for (let d = -1; d <= 1 && !hit; d++) for (const c of cells.get(cx + d) || []) if (c.long === g.long && Math.abs(c.x - x) < R && Math.abs(c.yy - yy) < 18){ hit = c; break; }
+        if (hit){ hit.pu += g.pu; hit.usd += g.usd; continue; }
+        const c = { i:g.i, long:g.long, pu:g.pu, usd:g.usd, x, yy };
+        out.push(c); (cells.get(cx) || cells.set(cx, []).get(cx)).push(c);
+      }
+      grp.length = 0; grp.push(...out);
+    }
     // 크기는 캔들 폭에 비례: 캔들 폭 20px일 때 기본 크기, 확대하면 최대 2배까지 커지고 축소하면 일찍부터 작아짐
     const k = Math.max(0.25, Math.min(2, slot / 20));
     const list = grp.sort((a, b) => a.usd - b.usd);   // 큰 것이 위에 오도록 작은 것부터
