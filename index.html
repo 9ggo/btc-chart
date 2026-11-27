@@ -10,6 +10,15 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 body{display:flex;flex-direction:column}
+header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
+.switch{position:relative;cursor:pointer;gap:6px}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch i{position:relative;display:inline-block;width:40px;height:22px;border-radius:11px;background:var(--btn2);border:1px solid var(--line)}
+.switch i::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .18s}
+.switch input:checked+i::after{transform:translateX(18px)}
+.switch input:focus-visible+i{outline:2px solid #58a6ff;outline-offset:2px}
+.switch input:not(:checked)~span:first-of-type,.switch input:checked~span:last-of-type{color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion:reduce){.switch i::after{transition:none}}
 header{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
 header b{font-size:14px;margin-right:4px}
 label{display:inline-flex;align-items:center;gap:4px;color:var(--dim);white-space:nowrap}
@@ -40,9 +49,12 @@ footer.folded #status{margin-left:auto}
   <label>봉 <select id="interval"><option>1m</option><option selected>5m</option><option>15m</option><option>1h</option><option>4h</option></select></label>
   <label>봉 개수 <select id="n"></select></label>
   <label>구간 <select id="bucket"><option value="0" id="autoOpt">자동</option><option value="1">$1</option><option value="5">$5</option><option value="10">$10</option><option value="20">$20</option><option value="25">$25</option><option value="50">$50</option><option value="100">$100</option><option value="250">$250</option><option value="500">$500</option></select></label>
-  <label>범위 <select id="range"><option value="0.5">±0.5%</option><option value="1" selected>±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
-    <button id="theme" type="button">라이트 모드</button>
+  <label>범위 <select id="range"><option value="0" selected>자동</option><option value="0.5">±0.5%</option><option value="1">±1%</option><option value="2">±2%</option><option value="3">±3%</option><option value="5">±5%</option></select></label>
   <label>최소 규모 $<input id="minQty" type="number" min="0" step="100000" value="0" style="width:96px"></label>
+  <div class="right">
+    <label class="switch"><span>다크</span><input id="theme" type="checkbox" role="switch" aria-label="라이트 모드"><i></i><span>라이트</span></label>
+    <button id="reset" type="button">설정 초기화</button>
+  </div>
 </header>
 <div id="wrap"><canvas id="cv"></canvas></div>
 <footer id="foot">
@@ -53,7 +65,7 @@ footer.folded #status{margin-left:auto}
     <p>흐린 회색 띠는 가격이 이미 닿아 소진된 청산 물량으로, 띠 끝의 세로 눈금이 가격이 닿은 시점이며 시간이 지날수록 옅어지다 사라지는데, 규모가 큰 물량일수록 더 오래 남습니다. 호가는 가격이 움직일수록 확인된 범위가 점점 넓어집니다. ▼·▲ 삼각형은 실제로 체결된 롱·숏 청산입니다.</p>
     <p>매수·매도 쪽마다 가장 큰 매물벽 3개는 점선으로 표시되고, 2분 이상 유지되면 실선과 테두리로 바뀝니다. 유지 시간 앞의 ≥ 표시는 차트를 열기 전부터 있던 벽이라는 뜻입니다.</p>
     <p>회색 취소선이 그어진 라벨은 가격이 닿기 전에 사라진 벽으로 스푸핑일 가능성이 있고, 노란 라벨은 가격이 닿아 체결된 벽입니다.</p>
-    <p>마우스 휠을 돌리면 커서 위치를 중심으로 가로·세로가 같은 비율로 확대·축소되고, Ctrl+휠은 가격축만 확대·축소합니다(터치 화면은 두 손가락으로 벌리거나 오므리기). 드래그로 상하좌우 이동합니다. 더블클릭하거나 두 번 탭하면 현재 위치로 돌아옵니다.</p>
+    <p>마우스 휠을 돌리면 커서 위치를 중심으로 가로·세로가 같은 비율로 확대·축소되고, Ctrl+휠은 가격축만 확대·축소합니다(터치 화면은 두 손가락으로 벌리거나 오므리기). 드래그로 상하좌우 이동합니다. 더블클릭하거나 두 번 탭하면 확대한 세로 비율은 유지한 채 현재가 중심으로 돌아오고, 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</p>
   </div>
   <span id="status">연결 중…</span>
 </footer>
@@ -66,7 +78,7 @@ const SAPI = 'https://api.binance.com';
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
-const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:1, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
+const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:true, liq:true, force:true, shift:0, theme:'dark', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let viewSpan = 1, viewPh = 1, viewSlot = 1, viewTop = 8, viewPlotW = 1, viewLo = 0, viewHi = 1;
 const THEMES = {
   dark:  { bg:'#0d1117', grid:'#1c2128', mute:'#a3adb8', line:'#30363d', lbg:'rgba(13,17,23,.85)', ink:'#9da7b3', inkS:'#e6edf3',
@@ -401,11 +413,12 @@ function render(){
   const endIdx = candles.length - whole;
   const P = lastPrice, vis = candles.slice(Math.max(0, endIdx - ST.n - (frac > 0 ? 1 : 0)), endIdx);
   let lo, hi;
-  if (ST.view){ lo = ST.view.lo; hi = ST.view.hi; }   // 직접 확대·이동한 범위 유지
-  else {                                              // 자동 맞춤
-    lo = P * (1 - ST.range / 100); hi = P * (1 + ST.range / 100);
+  if (ST.view){ lo = ST.view.lo; hi = ST.view.hi; }        // 직접 확대·이동한 범위 그대로
+  else if (ST.span){ lo = P - ST.span / 2; hi = P + ST.span / 2; }   // 늘린 세로 비율 유지 + 현재가 가운데
+  else {                                                   // 자동 맞춤: 보이는 캔들에 맞추고 현재가를 가운데로
+    lo = ST.range ? P * (1 - ST.range / 100) : P; hi = ST.range ? P * (1 + ST.range / 100) : P;
     for (const c of vis){ if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; }
-    const half = Math.max(P - lo, hi - P) * 1.02;     // 현재가가 세로 가운데에 오도록 위아래 대칭
+    const half = Math.max(P - lo, hi - P, P * 0.0015) * 1.05;
     lo = P - half; hi = P + half;
   }
   viewLo = lo; viewHi = hi; viewSpan = hi - lo; viewPh = ph; viewTop = top; viewPlotW = cw - 56;
@@ -647,8 +660,8 @@ function render(){
   // 현재가
   const yp = y(P);
   ctx.strokeStyle = T.price; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(W, yp); ctx.stroke(); ctx.setLineDash([]);
-  if (ST.view || ST.xOff >= 0.5) L.push(() => {
-    const t = `이동·확대 중 · 두 번 탭/더블클릭으로 현재 위치 복귀`;
+  if (ST.view || ST.span || ST.xOff >= 0.5) L.push(() => {
+    const t = ST.view || ST.xOff >= 0.5 ? '이동·확대 중 · 두 번 탭/더블클릭으로 현재가 복귀' : '확대 비율 유지 중 · 한 번 더 두 번 탭/더블클릭하면 자동 맞춤';
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'right';
     const tw = ctx.measureText(t).width;
     ctx.fillStyle = T.lbg; ctx.fillRect(cw - tw - 66, 4, tw + 10, 18);
@@ -697,7 +710,7 @@ setInterval(() => { if (dirty){ dirty = false; render(); } }, 250);
 setInterval(() => { dirty = true; }, 1000);
 new ResizeObserver(() => { dirty = true; }).observe($('wrap'));
 
-for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = +e.target.value || 0; if (id === 'range') ST.view = null; dirty = true; });
+for (const id of ['bucket', 'range', 'minQty']) $(id).addEventListener('input', e => { ST[id] = +e.target.value || 0; if (id === 'range'){ ST.view = null; ST.span = null; } dirty = true; });
 
 // 봉 개수: 보여주는 '기간'(분)을 기준으로 유지 — 5분×180 = 15분×60 = 1시간×15 = 4시간×4
 const IV_MIN = { '1m':1, '5m':5, '15m':15, '1h':60, '4h':240 };
@@ -718,8 +731,14 @@ $('n').addEventListener('change', e => { setN(+e.target.value); redraw(); });
 // 드래그 = 상하좌우 이동, 두 손가락 핀치 = 가로는 시간축·세로는 가격축 확대/축소, 두 번 탭/더블클릭 = 복귀
 let raf = 0;
 function redraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; depthCache = null; dirty = false; render(); }); }
-function resetView(){ ST.view = null; ST.xOff = 0; redraw(); }
-const manual = () => { if (!ST.view) ST.view = { lo:viewLo, hi:viewHi }; return ST.view; };
+// 두 번 탭/더블클릭: 확대해 둔 세로 비율은 유지한 채 최신 캔들·현재가 가운데로.
+// 이미 그 상태에서 한 번 더 하면 자동 맞춤으로.
+function resetView(){
+  if (ST.view) ST.span = ST.view.hi - ST.view.lo;
+  else if (ST.xOff < 0.5) ST.span = null;
+  ST.view = null; ST.xOff = 0; redraw();
+}
+const manual = () => { if (!ST.view){ ST.view = { lo:viewLo, hi:viewHi }; ST.span = null; } return ST.view; };
 const posOf = e => { const r = cv.getBoundingClientRect(); return { x:e.clientX - r.left, y:e.clientY - r.top }; };
 // (cx, cy) 지점을 고정점으로 확대·축소. ft = 시간축 배율, fp = 가격축 배율 (1보다 크면 축소)
 function zoomAt(ft, fp, cx, cy){
@@ -788,10 +807,10 @@ cv.addEventListener('pointerup', endPtr);
 cv.addEventListener('pointercancel', endPtr);
 cv.addEventListener('dblclick', resetView);
 // 테마 / 히트맵 팔레트 (이 브라우저에 기억)
-const store = { get(k){ try { return localStorage.getItem(k); } catch (e){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch (e){} } };
+const store = { get(k){ try { return localStorage.getItem(k); } catch (e){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch (e){} }, del(k){ try { localStorage.removeItem(k); } catch (e){} } };
 function applyLook(){
   document.documentElement.dataset.theme = ST.theme;
-  $('theme').textContent = ST.theme === 'dark' ? '라이트 모드' : '다크 모드';
+  $('theme').checked = ST.theme === 'light';
   $('swL').style.background = heat('L', 1, 1); $('swS').style.background = heat('S', 1, 1);
   dirty = true;
 }
@@ -801,8 +820,22 @@ applyLook();
 function setFold(f){ $('foot').classList.toggle('folded', f); $('legendBtn').textContent = f ? '설명 보기' : '설명 접기'; dirty = true; }
 setFold(store.get('btcFold') === '1');
 $('legendBtn').addEventListener('click', () => { const f = !$('foot').classList.contains('folded'); store.set('btcFold', f ? '1' : '0'); setFold(f); });
-$('theme').addEventListener('click', () => { ST.theme = ST.theme === 'dark' ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
-$('interval').addEventListener('change', e => { ST.interval = e.target.value; setN(ST.dur / IV_MIN[ST.interval], true); ST.xOff = 0; ST.view = null; changeInterval(); });
+$('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
+// 설정 초기화: 모든 선택을 기본값으로
+$('reset').addEventListener('click', () => {
+  for (const k of ['btcTheme', 'btcFold']) store.del(k);
+  ST.theme = 'dark'; applyLook(); setFold(false);
+  ST.bucket = 0; $('bucket').value = '0';
+  ST.range = 0; $('range').value = '0';
+  ST.minQty = 0; $('minQty').value = '0';
+  ST.view = null; ST.span = null; ST.xOff = 0;
+  const ivChanged = ST.interval !== '5m';
+  ST.interval = '5m'; $('interval').value = '5m'; setN(180);
+  depthCache = null;
+  if (ivChanged) changeInterval();
+  redraw();
+});
+$('interval').addEventListener('change', e => { ST.interval = e.target.value; setN(ST.dur / IV_MIN[ST.interval], true); ST.xOff = 0; ST.view = null; ST.span = null; changeInterval(); });
 }
 </script>
 </body>
