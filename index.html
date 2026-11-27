@@ -561,7 +561,7 @@ function render(){
     for (const f of forces){
       if (f.t < vis[0].t || f.t >= vis[vis.length - 1].t + step || f.p < lo || f.p > hi) continue;
       const i = Math.min(vis.length - 1, Math.floor((f.t - vis[0].t) / step));
-      const x = xOf(i), yy = y(f.p), s = Math.min(14, Math.max(5, Math.sqrt(f.usd / 5e3)));
+      const x = xOf(i), yy = y(f.p), s = Math.min(18, Math.max(7, Math.sqrt(f.usd / 3e3)));
       // 롱 청산 = 아래 삼각형(▼, 강제 매도), 숏 청산 = 위 삼각형(▲, 강제 매수)
       ctx.beginPath();
       if (f.long){ ctx.moveTo(x - s, yy - s); ctx.lineTo(x + s, yy - s); ctx.lineTo(x, yy + s * .4); }
@@ -706,7 +706,7 @@ function render(){
   for (const f of L) f();
   ctx.font = '700 12px sans-serif'; ctx.textAlign = 'right';
   const pt = P.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 }), ptw = ctx.measureText(pt).width;
-  const px = Math.round(cw * 0.82 + ptw / 2);   // 차트 오른쪽 부근, 살짝 투명
+  const px = Math.round(cw * 0.88 + ptw / 2);   // 차트 오른쪽 부근, 살짝 투명
   ctx.globalAlpha = 0.72;
   ctx.fillStyle = T.price; ctx.fillRect(px - ptw - 4, yp - 9, ptw + 8, 18);
   ctx.globalAlpha = 1;
