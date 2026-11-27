@@ -1015,6 +1015,7 @@ function chartDefaults(){
 // 오른쪽 아래 버튼: 과거를 보고 있으면 ▶| (현재로), 최신 화면인데 기본값과 다르면 ↺ (차트 기본값으로)
 const ICON_NOW = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 3l7 5-7 5z" fill="currentColor"/><rect x="12" y="3" width="2" height="10" fill="currentColor"/></svg>';
 const ICON_RESET = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 3a5 5 0 1 1-4.6 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.6 2.6l1.9 3.9 3.8-1.9z" fill="currentColor"/></svg>';
+cv.addEventListener('contextmenu', e => e.preventDefault());   // 차트 위 우클릭 시 브라우저 메뉴 안 뜨게
 $('toNow').addEventListener('click', () => { if ($('toNow').dataset.mode === 'now') resetView(); else chartDefaults(); });
 $('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
 // 설정 초기화: 모든 선택을 기본값으로
