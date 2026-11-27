@@ -508,7 +508,15 @@ function scanLevels(){
 setInterval(scanLevels, 250);
 // 구간 안에서 가장 큰 호가의 유지 시작 시각을 구간에 붙임
 function lvlLead(tg, p, q, o, now){
-  if (q > o.lq){ const L = lvl.get(tg + p); o.lq = q; o.ls = L ? L.s : now; }
+  const L = lvl.get(tg + p);
+  (o.lv || (o.lv = [])).push(q, L ? L.s : now);
+  if (q > o.lq) o.lq = q;
+}
+// 구간 나이: 그 구간 안에서 큰 호가(가장 큰 것의 50% 이상) 중 가장 오래 버틴 호가의 나이 → 줌·이동과 무관
+function bucketSince(o, now){
+  let s = now; const a = o.lv || [];
+  for (let i = 0; i < a.length; i += 2) if (a[i] >= 0.5 * o.lq && a[i + 1] < s) s = a[i + 1];
+  return s;
 }
 const fdur = ms => { const s = Math.floor(ms / 1000); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's' : Math.floor(s / 3600) + 'h' + String(Math.floor(s / 60) % 60).padStart(2, '0') + 'm'; };
 const fage = o => (o.fromStart ? '≥' : '') + fdur(o.age || 0);
@@ -532,8 +540,9 @@ function trackWalls(allRows, B, lo, hi, P, now, mxAll){
       walls.set(key, w);
     } else if (o.tot > w.peak) w.peak = o.tot;
     if (o.tot >= 0.4 * mxAll) w.big = true;
-    o.age = now - w.since;
-    o.fromStart = w.since - trackStart < 2000;
+    const bs = bucketSince(o, now);
+    o.age = now - bs;
+    o.fromStart = bs - trackStart < 2000;
   }
   for (const [key, w] of walls){
     if (!key.startsWith(tag)){ walls.delete(key); continue; }
@@ -847,11 +856,12 @@ function render(){
   let rows, bars, mx;
   {
   const bk = new Map();
+  const pA = Math.floor(lo / B) * B, pB = (Math.floor(hi / B) + 1) * B;   // 화면 끝에 걸친 구간도 잘리지 않게 통째로
   const agg = (book, fb, fa) => {
     if (!book.ready) return;
     book.uncross();
-    for (const [p, [q]] of book.bids){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fb] += q; bk.set(k, o); lvlLead(fb, p, q, o, now); }
-    for (const [p, [q]] of book.asks){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fa] += q; bk.set(k, o); lvlLead(fa, p, q, o, now); }
+    for (const [p, [q]] of book.bids){ if (p < pA || p >= pB) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fb] += q; bk.set(k, o); lvlLead(fb, p, q, o, now); }
+    for (const [p, [q]] of book.asks){ if (p < pA || p >= pB) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fa] += q; bk.set(k, o); lvlLead(fa, p, q, o, now); }
   };
   if (ST.fut) agg(futBook, 'fb', 'fa');
   if (ST.spot) agg(spotBook, 'sb', 'sa');
