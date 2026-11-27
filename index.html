@@ -876,11 +876,16 @@ function render(){
     const nameW = ctx.measureText(PANE_NAME[pn.id]).width;
     // 오른쪽 끝 버튼: ▲ ▼ 순서 변경, ▾/▸ 접기·펼치기
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center';
-    [['▲', 'up', cw - 68], ['▼', 'down', cw - 44], [pn.open ? '▾' : '▸', 'fold', cw - 20]].forEach(([g, act, bx]) => {
+    [['▲', 'up', cw - 68], ['▼', 'down', cw - 44], ['', 'fold', cw - 20]].forEach(([g, act, bx]) => {
       const dis = (act === 'up' && pi === 0) || (act === 'down' && pi === panes.length - 1);
-      if (act === 'fold'){ ctx.font = '700 14px sans-serif'; }
-      ctx.fillStyle = dis ? T.grid : act === 'fold' ? T.inkS : T.ink; ctx.fillText(g, bx, y0 + HDR / 2 + 1);
-      ctx.font = '600 11px sans-serif';
+      if (act === 'fold'){
+        // 접기·펼치기 아이콘: 펼쳐져 있으면 안쪽으로 모이는 화살표(><를 90° 돌린 모양), 접혀 있으면 바깥으로 벌어지는 화살표(<>를 90° 돌린 모양)
+        const cy = y0 + HDR / 2, w = 4.5, g2 = 1.6, hgt = 3;
+        ctx.strokeStyle = T.inkS; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+        if (pn.open){ ctx.moveTo(bx - w, cy - g2 - hgt); ctx.lineTo(bx, cy - g2); ctx.lineTo(bx + w, cy - g2 - hgt); ctx.moveTo(bx - w, cy + g2 + hgt); ctx.lineTo(bx, cy + g2); ctx.lineTo(bx + w, cy + g2 + hgt); }
+        else { ctx.moveTo(bx - w, cy - g2); ctx.lineTo(bx, cy - g2 - hgt); ctx.lineTo(bx + w, cy - g2); ctx.moveTo(bx - w, cy + g2); ctx.lineTo(bx, cy + g2 + hgt); ctx.lineTo(bx + w, cy + g2); }
+        ctx.stroke(); ctx.lineWidth = 1; ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+      } else { ctx.fillStyle = dis ? T.grid : T.ink; ctx.fillText(g, bx, y0 + HDR / 2 + 1); }
       if (!dis) paneHits.push({ x0:bx - 11, x1:bx + 11, y0, y1, act, id:pn.id });
     });
     paneHits.push({ x0:0, x1:cw - 80, y0:y0 - 3, y1, act:'head', id:pn.id });
@@ -926,6 +931,16 @@ function render(){
       for (const lv of [30, 70]){ ctx.beginPath(); ctx.moveTo(0, Y(lv)); ctx.lineTo(cw, Y(lv)); ctx.stroke(); }
       ctx.setLineDash([]); ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(142,91,214,.08)'; ctx.fillRect(0, Y(70), cw, Y(30) - Y(70));
+      // 70 넘은 부분은 초록, 30 밑은 빨강으로 채움
+      if (pts.length > 1){
+        for (const [lv, col, above] of [[70, 'rgba(38,166,154,.45)', true], [30, 'rgba(239,83,80,.45)', false]]){
+          ctx.save(); ctx.beginPath();
+          if (above) ctx.rect(0, top2, cw, Y(lv) - top2); else ctx.rect(0, Y(lv), cw, bot2 - Y(lv));
+          ctx.clip(); ctx.beginPath(); ctx.moveTo(pts[0][0], Y(lv));
+          for (const [x, v] of pts) ctx.lineTo(x, Y(v));
+          ctx.lineTo(pts[pts.length - 1][0], Y(lv)); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
+        }
+      }
       line(pts, '#8e5bd6');
       { const r = at(rArr); info = r != null ? r.toFixed(1) : ''; }
       fmt = v => v.toFixed(0);
@@ -949,10 +964,17 @@ function render(){
       line(pts, '#1f77d0', 1.5);
       { const v = at(cArr); info = (v >= 0 ? '+' : '') + fmt(v); }
     }
+    // 패널이 충분히 높으면 가로 눈금선과 참고 숫자 추가
+    const ph2 = bot2 - top2, yt = [];
+    if (pn.id === 'rsi'){ const st = ph2 >= 120 ? 10 : ph2 >= 70 ? 20 : 0; if (st) for (let v = st; v < 100; v += st) yt.push(v); }
+    else if (ph2 >= 60 && hi2 > lo2){ const st = nice((hi2 - lo2) / Math.floor(ph2 / 30)); for (let v = Math.ceil(lo2 / st) * st; v <= hi2; v += st) yt.push(v); }
+    ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
+    for (const v of yt){ const yy = Math.round(Y(v)) + .5; if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke(); }
     ctx.restore();
-    // 오른쪽 축 값(최대·최소)과 제목줄의 현재 값
+    // 오른쪽 축 값과 제목줄의 현재 값
     ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
-    ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5);
+    if (yt.length){ for (const v of yt){ const yy = Y(v); if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.fillText(fmt(v), cw + 4, yy); } }
+    else { ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5); }
     ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = hIdx >= 0 ? T.hint : T.ink; ctx.fillText(info, 16 + nameW, y0 + HDR / 2 + 1);
     py += h;
   });
