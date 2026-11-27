@@ -587,8 +587,8 @@ function render(){
       const g = grp.get(key);
       if (g){ g.pu += f.p * f.usd; g.usd += f.usd; } else grp.set(key, { i, long:f.long, pu:f.p * f.usd, usd:f.usd });
     }
-    // 크기는 캔들 폭에 맞춰 줄어듦: 캔들이 넓으면 원래 크기, 축소해서 좁아지면 같이 작아짐
-    const k = Math.max(0.3, Math.min(1, slot / 12));
+    // 크기는 캔들 폭에 비례: 캔들 폭 20px일 때 기본 크기, 확대하면 최대 2배까지 커지고 축소하면 일찍부터 작아짐
+    const k = Math.max(0.25, Math.min(2, slot / 20));
     const list = [...grp.values()].sort((a, b) => a.usd - b.usd);   // 큰 것이 위에 오도록 작은 것부터
     for (const g of list){
       const x = xOf(g.i), yy = y(g.pu / g.usd);
@@ -602,7 +602,7 @@ function render(){
       if (s > 4){ ctx.strokeStyle = T.mark; ctx.lineWidth = 0.5; ctx.stroke(); ctx.lineWidth = 1; }
     }
     // 금액 글자: $10만 이상, 삼각형이 충분히 클 때만, 큰 금액부터 겹치지 않게 맨 앞에 그림
-    if (k >= 0.6){
+    if (k >= 0.3){
       ctx.font = '700 10px sans-serif';
       for (const g of [...list].reverse()){
         if (g.usd < 1e5) break;
