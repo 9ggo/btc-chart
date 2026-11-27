@@ -489,12 +489,25 @@ let trackStart = 0;
 // 가격 한 칸(호가 단위)별 유지 시간: 구간 크기와 상관없이 기록 → 줌인·아웃해도 시간이 초기화되지 않음
 const lvl = new Map();
 let lvlGen = 0;
-function lvlSeen(tg, p, q, o, now){
-  const key = tg + p;
-  let L = lvl.get(key);
-  if (!L || q < 0.5 * L.pk){ L = { s:now, pk:q, p, g:lvlGen }; lvl.set(key, L); }
-  else { if (q > L.pk) L.pk = q; L.g = lvlGen; }
-  if (q > o.lq){ o.lq = q; o.ls = L.s; }
+// 화면과 상관없이 받아 둔 호가 전체를 0.25초마다 훑어서 상시 추적
+function scanLevels(){
+  const now = Date.now(); lvlGen++;
+  const scan = (book, tb, ta) => {
+    if (!book.ready) return;
+    for (const [side, tg] of [[book.bids, tb], [book.asks, ta]]) for (const [p, [q]] of side){
+      if (!(q > 0)) continue;
+      const key = tg + p; let L = lvl.get(key);
+      if (!L || q < 0.5 * L.pk){ L = { s:now, pk:q, g:lvlGen }; lvl.set(key, L); }
+      else { if (q > L.pk) L.pk = q; L.g = lvlGen; }
+    }
+  };
+  scan(futBook, 'fb', 'fa'); scan(spotBook, 'sb', 'sa');
+  for (const [key, L] of lvl) if (L.g !== lvlGen) lvl.delete(key);   // 호가창에서 사라진 가격은 기록 삭제
+}
+setInterval(scanLevels, 250);
+// 구간 안에서 가장 큰 호가의 유지 시작 시각을 구간에 붙임
+function lvlLead(tg, p, q, o, now){
+  if (q > o.lq){ const L = lvl.get(tg + p); o.lq = q; o.ls = L ? L.s : now; }
 }
 const fdur = ms => { const s = Math.floor(ms / 1000); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's' : Math.floor(s / 3600) + 'h' + String(Math.floor(s / 60) % 60).padStart(2, '0') + 'm'; };
 const fage = o => (o.fromStart ? '≥' : '') + fdur(o.age || 0);
@@ -836,13 +849,11 @@ function render(){
   const agg = (book, fb, fa) => {
     if (!book.ready) return;
     book.uncross();
-    for (const [p, [q]] of book.bids){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fb] += q; bk.set(k, o); lvlSeen(fb, p, q, o, now); }
-    for (const [p, [q]] of book.asks){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fa] += q; bk.set(k, o); lvlSeen(fa, p, q, o, now); }
+    for (const [p, [q]] of book.bids){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fb] += q; bk.set(k, o); lvlLead(fb, p, q, o, now); }
+    for (const [p, [q]] of book.asks){ if (p < lo || p > hi) continue; const k = Math.floor(p / B); const o = bk.get(k) || { k, fb:0, fa:0, sb:0, sa:0, lq:0, ls:now }; o[fa] += q; bk.set(k, o); lvlLead(fa, p, q, o, now); }
   };
-  lvlGen++;
   if (ST.fut) agg(futBook, 'fb', 'fa');
   if (ST.spot) agg(spotBook, 'sb', 'sa');
-  for (const [key, L] of lvl) if (L.g !== lvlGen && L.p >= lo && L.p <= hi) lvl.delete(key);   // 화면 안에서 사라진 호가는 기록 삭제
   const allRows = [...bk.values()].map(o => { o.bid = o.fb + o.sb; o.ask = o.fa + o.sa; o.tot = o.bid + o.ask; o.side = o.bid >= o.ask ? 'b' : 'a'; return o; })
                                  .filter(o => o.tot > 0);
   if (allRows.length) trackWalls(allRows, B, lo, hi, P, now, Math.max(...allRows.map(o => o.tot)));
