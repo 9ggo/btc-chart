@@ -1161,9 +1161,9 @@ function render(){
       for (const lv of [30, 70]){ ctx.beginPath(); ctx.moveTo(0, Y(lv)); ctx.lineTo(cw, Y(lv)); ctx.stroke(); }
       ctx.setLineDash([]); ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(142,91,214,.08)'; ctx.fillRect(0, Y(70), cw, Y(30) - Y(70));
-      // 70 넘은 부분은 초록, 30 밑은 빨강으로 채움
+      // 70 넘은 부분(과매수)은 빨강, 30 밑(과매도)은 초록으로 채움 — 제목줄 숫자 색과 같게
       if (pts.length > 1){
-        for (const [lv, col, above] of [[70, 'rgba(38,166,154,.45)', true], [30, 'rgba(239,83,80,.45)', false]]){
+        for (const [lv, col, above] of [[70, 'rgba(239,83,80,.45)', true], [30, 'rgba(38,166,154,.45)', false]]){
           ctx.save(); ctx.beginPath();
           // 정확히 70 초과 / 30 미만 부분만 채움 (기준선 높이에서 딱 잘라냄)
           const yl = Y(lv), yc = yl;
