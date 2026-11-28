@@ -857,7 +857,7 @@ function render(){
         const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(kA * B)}-${fp((kB + 1) * B)}  ${fu(su)}`;
         const font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
         ctx.font = font;
-        const tw = ctx.measureText(t).width, xr = cw * 0.75, x = Math.max(2, xr - tw - 8);   // 가로 3/4 지점에서 끝나게
+        const tw = ctx.measureText(t).width, xr = cw * 0.78, x = Math.max(2, xr - tw - 8);   // 가로 78% 지점에서 끝나게
         if (hit(x, xr, ym - fs / 2 - 3, ym + fs / 2 + 3)) continue;
         boxes.push([x, xr, ym - fs / 2 - 3, ym + fs / 2 + 3]); n++;
         L.push(() => {
@@ -1013,6 +1013,7 @@ function render(){
       const fs = Math.round(9 + 9 * r ** 0.8), ym = y((o.k + .5) * B);
       if (ym < top + fs / 2 || ym > bot - fs / 2 || overlaps(placed, ym - fs / 2 - 2, ym + fs / 2 + 2)) continue;
       placed.push([ym - fs / 2 - 2, ym + fs / 2 + 2]);
+      boxes.push([W - tw - 10, W, ym - fs / 2 - 2, ym + fs / 2 + 2]);   // 아래 체결/취소 라벨이 이 숫자를 가리지 않게
       const old = o.age >= PERSIST;
       let t = `${fp(o.k * B)}-${fp((o.k + 1) * B)}  ${fu(o.usd)} · ${fage(o)}`;
       ctx.font = `${st ? 700 : 500} ${fs}px sans-serif`;
@@ -1033,20 +1034,20 @@ function render(){
   }
   // 최근 사라진 큰 벽: 취소(가격이 안 닿았는데 사라짐 = 스푸핑 의심) / 체결(가격이 닿아서 소화됨)
   L.push(() => {
-    ctx.textAlign = 'right'; ctx.font = '500 11px sans-serif';
+    ctx.textAlign = 'left'; ctx.font = '500 11px sans-serif';
     for (let i = ghosts.length - 1; i >= 0; i--){
       const g = ghosts[i], a = 1 - (now - g.t) / GHOST_MS;
       if (a <= 0) continue;   // 구간 크기가 바뀌어도(줌) 계속 표시 — 위치는 그 벽의 가운데 가격
       const ym = y(g.pLo + g.B / 2);
       if (ym < top + 8 || ym > bot - 8) continue;
       const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
-      const tw = ctx.measureText(t).width, x = cw * 0.855;   // 화면 가로 85.5% 지점에서 끝나게 고정
-      if (hit(x - tw - 6, x + 2, ym - 8, ym + 8)) continue;
-      boxes.push([x - tw - 6, x + 2, ym - 8, ym + 8]);
+      const tw = ctx.measureText(t).width, x = cw + 4;   // 호가창 왼쪽 끝에서 시작
+      if (hit(x - 2, x + tw + 6, ym - 8, ym + 8)) continue;   // 호가 숫자 라벨과 겹치면 생략
+      boxes.push([x - 2, x + tw + 6, ym - 8, ym + 8]);
       ctx.globalAlpha = Math.max(.25, a);
-      ctx.fillStyle = T.lbg; ctx.fillRect(x - tw - 6, ym - 8, tw + 8, 16);
+      ctx.fillStyle = T.lbg; ctx.fillRect(x - 2, ym - 8, tw + 8, 16);
       ctx.fillStyle = g.kind === '취소' ? T.ghost : T.ghostF;
-      ctx.fillText(t, x - 2, ym);
+      ctx.fillText(t, x + 2, ym);
       ctx.globalAlpha = 1;
     }
   });
