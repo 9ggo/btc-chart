@@ -105,7 +105,7 @@ footer.folded{display:none}
       <div class="row"><dt>취소</dt><dd>가격이 닿기 전에 사라진 큰 벽입니다. 스푸핑일 가능성이 있습니다.</dd></div>
       <div class="row"><dt>체결</dt><dd>가격이 닿아 실제로 소화된 큰 벽입니다.</dd></div>
       <div class="row"><dt>거래량</dt><dd>봉마다 거래된 금액(달러)입니다. 오른 봉은 초록, 내린 봉은 빨강입니다.</dd></div>
-      <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다. 초록 선은 상승 다이버전스(가격은 더 낮은 저점, RSI는 더 높은 저점), 빨간 선은 하락 다이버전스이며, 고점·저점 확인에 5봉이 걸려 그만큼 늦게 나타납니다.</dd></div>
+      <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다. 초록 선은 상승 다이버전스(가격은 더 낮은 저점, RSI는 더 높은 저점), 빨간 선은 하락 다이버전스입니다. 고점·저점 확인에 5봉이 걸려 그만큼 늦게 나타납니다.</dd></div>
       <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
       <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 파랑은 선물, 분홍은 현물이며 두 선은 각자 높이를 따로 맞춰 모양을 비교하기 쉽게 그립니다(오른쪽 눈금은 선물 기준). 선물만 오르고 현물이 안 따라오면 레버리지 위주의 움직임입니다.</dd></div>
       <div class="row"><dt>CB 프리미엄</dt><dd>코인베이스와 바이낸스 현물의 가격 차이(%)입니다. +가 클수록 미국 쪽 매수세가 강합니다.</dd></div>
@@ -1183,11 +1183,9 @@ function render(){
         const divs = [];
         for (let k = 1; k < lowP.length; k++){ const q = lowP[k - 1], p = lowP[k]; if (p - q >= MINR && p - q <= MAXR && rArr[p] > rArr[q] && vis[p].l < vis[q].l) divs.push([q, p, true]); }
         for (let k = 1; k < highP.length; k++){ const q = highP[k - 1], p = highP[k]; if (p - q >= MINR && p - q <= MAXR && rArr[p] < rArr[q] && vis[p].h > vis[q].h) divs.push([q, p, false]); }
-        ctx.font = '700 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         for (const [q, p, bull] of divs){
           const col = bull ? '#0f9d58' : '#e5322d', x1 = xOf(q), y1 = Y(rArr[q]), x2 = xOf(p), y2 = Y(rArr[p]);
-          ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.lineWidth = 1;
-          if (slot >= 1.5 || divs.length < 30){ ctx.fillStyle = col; ctx.fillText(bull ? '상승' : '하락', x2, bull ? Math.min(bot2 - 6, y2 + 10) : Math.max(top2 + 6, y2 - 10)); }
+          ctx.strokeStyle = col; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.lineWidth = 1;
         }
       }
       { const r = at(rArr); info = r != null ? r.toFixed(1) : ''; iv = r; }
@@ -1229,7 +1227,7 @@ function render(){
         }
         line(pts, '#5e6ad2', 1.4);
         info = fmt(pts[pts.length - 1][1]); iv = pts[pts.length - 1][1];
-        vc = v => v == null ? T.ink : v >= 0 ? '#e5322d' : '#1f6fe5';   // + 빨강, − 파랑
+        vc = v => v == null ? T.ink : v >= 0 ? '#0f9d58' : '#d93025';   // + 초록, − 빨강 (ETF 박스와 같은 색)
         if (hIdx >= 0 && arr[hIdx] != null){ hv = arr[hIdx]; hTxt = fmt(hv); }
       } else info = '불러오는 중…';
     } else if (pn.id === 'cvd'){
