@@ -122,6 +122,7 @@ footer.folded{display:none}
       <div class="row"><dt>가격표 +</dt><dd>십자선 오른쪽 끝 가격표의 + 를 누르면 그 가격이 복사됩니다. + 위에 마우스가 있는 동안은 차트가 위아래로 움직이지 않습니다.</dd></div>
       <div class="row"><dt>휠</dt><dd>현재가가 가운데 고정된 상태에서는 커서 위치를 기준으로 시간축을 확대·축소하고 현재가는 가운데에 그대로 둡니다. 드래그로 옮긴 뒤에는 커서 위치를 기준으로 확대·축소합니다.</dd></div>
       <div class="row"><dt>Ctrl + 휠</dt><dd>가격축만 확대·축소합니다.</dd></div>
+      <div class="row"><dt>길게 누르기 (터치)</dt><dd>손가락을 잠깐 누르고 있다가 움직이면 차트는 그대로 두고 십자선만 따라 움직입니다. 펜은 바로 십자선이 움직입니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 화면에 맞게 자동으로 맞춰집니다.</dd></div>
       <div class="row"><dt>우클릭</dt><dd>"현재로 이동"은 확대 비율을 유지한 채 최신 캔들로, "화면 자동 맞춤"은 화면에 맞게 자동으로 맞춥니다.</dd></div>
       <div class="row"><dt>Reset</dt><dd>다크/라이트 모드와 설명 접기 상태를 뺀 모든 설정을 기본값으로 되돌립니다.</dd></div>
@@ -1618,10 +1619,17 @@ cv.addEventListener('pointerdown', e => {
   ptrs.set(e.pointerId, pp);
   try { cv.setPointerCapture(e.pointerId); } catch (_){}
   if (ptrs.size === 2){
+    if (drag && drag.timer) clearTimeout(drag.timer);
     const [a, b] = [...ptrs.values()];
     pinch = { dx:Math.abs(a.x - b.x), dy:Math.abs(a.y - b.y), useX:Math.abs(a.x - b.x) > 40, useY:Math.abs(a.y - b.y) > 40 }; drag = null;
   } else if (ptrs.size === 1){
-    drag = { x:e.clientX, y:e.clientY, v:ST.view ? { ...ST.view } : null, xo:ST.xOff, moved:false };
+    drag = { x:e.clientX, y:e.clientY, v:ST.view ? { ...ST.view } : null, xo:ST.xOff, moved:false, cross:false };
+    // 터치: 손가락을 0.3초 누르고 있으면 십자선 모드 → 그대로 움직이면 십자선이 따라옴 (펜은 바로 십자선)
+    if (e.pointerType === 'pen'){ drag.cross = true; hover = pp; redraw(); }
+    else if (e.pointerType === 'touch'){
+      const d0 = drag;
+      d0.timer = setTimeout(() => { if (drag === d0 && !d0.moved && ptrs.size === 1){ d0.cross = true; hover = posOf({ clientX:d0.lx ?? d0.x, clientY:d0.ly ?? d0.y }); if (navigator.vibrate) navigator.vibrate(10); redraw(); } }, 300);
+    }
   }
 });
 cv.addEventListener('pointermove', e => {
@@ -1655,6 +1663,8 @@ cv.addEventListener('pointermove', e => {
     pinch.dx = dx; pinch.dy = dy; return;
   }
   if (!drag) return;
+  drag.lx = e.clientX; drag.ly = e.clientY;
+  if (drag.cross){ hover = posOf(e); redraw(); return; }   // 십자선 모드: 화면은 그대로, 십자선만 이동
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.hypot(dx, dy) > 6){ drag.moved = true; if (e.pointerType !== 'mouse') hover = null; }
   if (drag.moved){
@@ -1671,6 +1681,8 @@ function endPtr(e){
     paneDrag = null; savePanes(); redraw(); return;
   }
   ptrs.delete(e.pointerId);
+  if (drag && drag.timer) clearTimeout(drag.timer);
+  if (drag && drag.cross){ drag = null; return; }   // 십자선 모드에서 손을 떼면 그 자리에 십자선 유지
   if (pinch){ if (ptrs.size < 2){ pinch = null; drag = null; lastTap.t = 0; } return; }
   if (drag && !drag.moved && e.type === 'pointerup' && e.pointerType !== 'mouse'){   // 마우스는 dblclick 이벤트가 따로 처리
     const now = Date.now();
