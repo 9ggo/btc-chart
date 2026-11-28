@@ -67,7 +67,7 @@ footer{padding:8px 12px;font-size:13px;line-height:1.5;color:var(--dim);backgrou
 footer.folded{display:none}
 /* 설명 버튼·시계: 맨 아래 지표 옆(시간축 오른쪽 빈칸)에 겹쳐 둠 */
 #wrap .foot-r{position:absolute;z-index:4;right:8px;bottom:4px;height:26px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
-#legendBtn{font-size:11.5px;line-height:1;height:21px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center}
+#legendBtn{font-size:11.5px;line-height:1;height:21px;padding:2px 9px 0;box-sizing:border-box;border-radius:6px;display:inline-flex;align-items:center;justify-content:center}
 #status{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:3px}
 #status.err{color:#ff7b72}
@@ -1104,7 +1104,8 @@ function render(){
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const tw = ctx.measureText(t).width + 16;
     ctx.fillStyle = T.lbg; ctx.fillRect(bx - tw / 2, by - 8, tw, 16); ctx.strokeStyle = T.line; ctx.strokeRect(Math.round(bx - tw / 2) + .5, Math.round(by - 8) + .5, Math.round(tw), 15);
-    ctx.fillStyle = T.ink; ctx.fillText(t, bx, by + 1);
+    // 글꼴마다 'middle' 기준선 위치가 달라 실제 글자 높이로 가운데 맞춤
+    { const m = ctx.measureText(t), asc = m.actualBoundingBoxAscent || 8, des = m.actualBoundingBoxDescent || 2; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = T.ink; ctx.fillText(t, bx, by + (asc - des) / 2); ctx.textBaseline = 'middle'; }
     paneHits.push({ x0:bx - tw / 2, x1:bx + tw / 2, y0:by - 8, y1:by + 8, act:'foldAll', id:panes[0].id });
   }
   let py = axTop + AX;
