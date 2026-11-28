@@ -1115,7 +1115,7 @@ function render(){
     let info = '', lo2 = 0, hi2 = 1, fmt = v => fu(Math.abs(v)).replace('$', v < 0 ? '-$' : '$');
     const at = arr => arr[arr.length - 1];   // 제목줄은 항상 최신 값
     let hv = null, hTxt = '';                 // 커서가 가리키는 봉의 값 (커서 옆에 표시)
-    let iv = null, vc = () => T.ink, hNone = false, extra = null;   // extra: 제목줄 값 뒤에 붙는 추가 문구   // hNone: 커서 봉에 기록이 없음          // 제목줄 숫자 색: 지표마다 값에 따라 (기본 검정)
+    let iv = null, vc = () => T.ink, hNone = false, extra = null, iSegs = null, hSegs = null;   // iSegs·hSegs: 색을 나눠 쓰는 제목줄 (최신값·커서값)   // extra: 제목줄 값 뒤에 붙는 추가 문구   // hNone: 커서 봉에 기록이 없음          // 제목줄 숫자 색: 지표마다 값에 따라 (기본 검정)
     const Y = v => bot2 - (v - lo2) / (hi2 - lo2 || 1) * (bot2 - top2 - 3);
     // 패널이 충분히 높으면 가로 눈금선(그래프 뒤)과 참고 숫자 — 각 지표의 범위를 정한 직후, 그래프보다 먼저 그림
     const ph2 = bot2 - top2, yt = [];
@@ -1265,19 +1265,27 @@ function render(){
       [lo2, hi2] = fR;
       line(pts, '#1f77d0');
       const sg = v => (v >= 0 ? '+' : '') + fmt(v);
-      { const v = at(cArr), vs = sArr.length ? at(sArr) : null; info = `선물 ${sg(v)} · 현물 ${vs == null ? '…' : sg(vs)}`; }
-      if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = `선물 ${sg(hv)}` + (sArr[hIdx] != null ? ` · 현물 ${sg(sArr[hIdx])}` : ''); }
+      // 제목줄의 '선물'·'현물' 글자를 각 선의 색으로 → 어느 선인지 바로 알 수 있게
+      const segs = (f, sp) => [['선물 ', '#1f77d0'], [sg(f), T.ink], ...(sp === undefined ? [] : [[' · ', T.mute], ['현물 ', '#d81b60'], [sp == null ? '…' : sg(sp), T.ink]])];
+      { const v = at(cArr), vs = sArr.length ? at(sArr) : null; info = `선물 ${sg(v)} · 현물 ${vs == null ? '…' : sg(vs)}`; iSegs = segs(v, vs); }
+      if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = `선물 ${sg(hv)}` + (sArr[hIdx] != null ? ` · 현물 ${sg(sArr[hIdx])}` : ''); hSegs = segs(hv, sArr[hIdx] != null ? sArr[hIdx] : undefined); }
     }
     ctx.restore();
     const headTxt = hNone ? '이 시점 기록 없음' : hv != null ? hTxt : info, headCol = hNone ? T.mute : vc(hv != null ? hv : iv);
+    const segsNow = hNone ? null : hv != null ? hSegs : iSegs;
+    const drawHead = () => {
+      ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif';
+      if (segsNow){ let x = 16 + nameW; for (const [t, c] of segsNow){ ctx.fillStyle = c; ctx.fillText(t, x, y0 + HDR / 2 + 1); x += ctx.measureText(t).width; } }
+      else { ctx.fillStyle = headCol; ctx.fillText(headTxt, 16 + nameW, y0 + HDR / 2 + 1); }
+    };
     const drawExtra = () => { if (!extra) return; const w0 = ctx.measureText(headTxt).width; ctx.fillStyle = extra.col; ctx.fillText('· ' + extra.txt, 16 + nameW + w0 + 8, y0 + HDR / 2 + 1); };
-    if (folded){ ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = headCol; ctx.fillText(headTxt, 16 + nameW, y0 + HDR / 2 + 1); drawExtra(); return; }
+    if (folded){ drawHead(); drawExtra(); return; }
     // 오른쪽 축 값과 제목줄의 현재 값
     ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
     if (yt.length){ for (const v of yt){ const yy = Y(v); if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.fillText(fmt(v), cw + 4, yy); } }
     else { ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5); }
     // 제목줄: 커서가 차트·지표 위에 있으면 그 봉의 값, 밖이면 최신 값
-    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = headCol; ctx.fillText(headTxt, 16 + nameW, y0 + HDR / 2 + 1); drawExtra();
+    drawHead(); drawExtra();
     // 커서가 가리키는 봉: 그 값의 높이에 작은 점, 커서가 이 지표 안에 있을 때만 옆에 숫자
     if (hv != null && hTxt){
       const hx = Math.round(xOf(hIdx)) + .5;   // 세로 점선과 같은 x
