@@ -1027,7 +1027,7 @@ function render(){
       wallBoxes.push([W - tw - 10, W, ym - fs / 2 - 2, ym + fs / 2 + 2]);
       L.push(() => {
         ctx.font = `${st ? 700 : 500} ${fs}px sans-serif`; ctx.textAlign = 'right';
-        ctx.fillStyle = T.lbg; ctx.fillRect(W - tw - 10, ym - fs / 2 - 2, tw + 8, fs + 4);
+        ctx.globalAlpha = .7; ctx.fillStyle = T.lbg; ctx.fillRect(W - tw - 10, ym - fs / 2 - 2, tw + 8, fs + 4); ctx.globalAlpha = 1;   // 매물벽 라벨 배경은 조금 더 투명하게
         if (st && old){ ctx.strokeStyle = o.side === 'b' ? T.bidS : T.askS; ctx.lineWidth = 1; ctx.strokeRect(W - tw - 10 + .5, ym - fs / 2 - 2 + .5, tw + 7, fs + 3); }
         ctx.fillStyle = st ? (o.side === 'b' ? T.bidS : T.askS) : (old ? T.inkS : T.ink);
         ctx.fillText(t, W - 6, ym);
