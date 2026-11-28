@@ -217,22 +217,22 @@ function xsReset(){
   XS.cbG = iv === '1M' || iv === '1y' || iv === '1w' ? 86400 : CB_GRAN.find(g => g <= sec && sec % g === 0) || 60;
 }
 async function xsSpot(startTime, endTime){
-  const iv = XS.iv === '1y' ? '1M' : XS.iv;
+  const iv0 = XS.iv, iv = iv0 === '1y' ? '1M' : iv0;
   let u = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${iv}&limit=1000`;
   if (startTime != null) u += `&startTime=${startTime}`; if (endTime != null) u += `&endTime=${endTime}`;
   const r = await fetch(u); if (!r.ok) throw 0;
   const a = (await r.json()).map(k => ({ t:k[0], c:+k[4], qv:+k[7] || +k[5] * +k[4], tq:+k[10] || +k[9] * +k[4] }));
-  if (XS.iv !== ST.interval) return;
+  if (XS.iv !== iv0 || ST.interval !== iv0) return;   // 받는 사이 봉을 바꿨으면 버림 (다른 간격 캔들이 섞이지 않게)
   for (const k of a) XS.spot.set(k.t, k);
   if (a.length){ XS.spFrom = Math.min(XS.spFrom, a[0].t); XS.spTo = Math.max(XS.spTo, a[a.length - 1].t); }
   return a.length;
 }
 async function xsCb(endMs){
-  const g = XS.cbG, start = endMs - g * 1000 * 299;
+  const g = XS.cbG, iv0 = XS.iv, start = endMs - g * 1000 * 299;
   const u = `https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=${g}&start=${new Date(start).toISOString()}&end=${new Date(endMs).toISOString()}`;
   const r = await fetch(u); if (!r.ok) throw 0;
   const a = await r.json();   // [시각(초), 저가, 고가, 시가, 종가, 거래량], 최신순
-  if (XS.iv !== ST.interval || XS.cbG !== g) return;
+  if (XS.iv !== iv0 || ST.interval !== iv0 || XS.cbG !== g) return;
   for (const k of a) XS.cb.set(k[0] * 1000, k[4]);
   XS.cbT = [...XS.cb.keys()].sort((x, y) => x - y);
   XS.cbFrom = Math.min(XS.cbFrom, start); XS.cbTo = Math.max(XS.cbTo, endMs);
@@ -1231,6 +1231,7 @@ function render(){
         let v = null;
         if (newest && i === vis.length - 1){ const ref = binanceSpotMid(); if (cbPrice && ref) v = (cbPrice - ref) / ref * 100; }
         else { const e = i + 1 < vis.length ? vis[i + 1].t : c.t + IV_MIN[ST.interval] * 60000, cb = cbCloseBefore(e), sp = spotOf(c.t); if (cb && sp && sp.c) v = (cb - sp.c) / sp.c * 100; }
+        if (v != null && Math.abs(v) > 3) v = null;   // ±3%를 넘으면 실제 프리미엄이 아니라 시점이 어긋난 데이터로 보고 뺌
         if (v != null && isFinite(v)){ pts.push([xOf(i), v]); arr[i] = v; }
       });
       fmt = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(Math.abs(v) >= 1 ? 2 : 3) + '%';
