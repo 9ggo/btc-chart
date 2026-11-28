@@ -1115,7 +1115,7 @@ function render(){
     let info = '', lo2 = 0, hi2 = 1, fmt = v => fu(Math.abs(v)).replace('$', v < 0 ? '-$' : '$');
     const at = arr => arr[arr.length - 1];   // 제목줄은 항상 최신 값
     let hv = null, hTxt = '';                 // 커서가 가리키는 봉의 값 (커서 옆에 표시)
-    let iv = null, vc = () => T.ink;          // 제목줄 숫자 색: 지표마다 값에 따라 (기본 검정)
+    let iv = null, vc = () => T.ink, hNone = false;   // hNone: 커서 봉에 기록이 없음          // 제목줄 숫자 색: 지표마다 값에 따라 (기본 검정)
     const Y = v => bot2 - (v - lo2) / (hi2 - lo2 || 1) * (bot2 - top2 - 3);
     // 패널이 충분히 높으면 가로 눈금선(그래프 뒤)과 참고 숫자 — 각 지표의 범위를 정한 직후, 그래프보다 먼저 그림
     const ph2 = bot2 - top2, yt = [];
@@ -1203,7 +1203,7 @@ function render(){
         lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad; grid();
         line(pts, '#d18b00');
         const b = pts[pts.length - 1][1];
-        if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht && o.t >= t0 - tStep * 2); if (pr.length){ hv = pr[pr.length - 1].v; hTxt = fu(hv); } }
+        if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht && o.t >= t0 - tStep * 2); if (pr.length){ hv = pr[pr.length - 1].v; hTxt = fu(hv); } else hNone = true; }
         const a = pts[0][1]; info = `${fu(b)} (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
       } else info = ST.xOff > 0 ? '이 구간 기록 없음 (최근 약 30일까지만 제공)' : '불러오는 중…';
     } else if (pn.id === 'cbp'){
@@ -1249,13 +1249,14 @@ function render(){
       if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = `선물 ${sg(hv)}` + (sArr[hIdx] != null ? ` · 현물 ${sg(sArr[hIdx])}` : ''); }
     }
     ctx.restore();
-    if (folded){ ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = vc(hv != null ? hv : iv); ctx.fillText(hv != null ? hTxt : info, 16 + nameW, y0 + HDR / 2 + 1); return; }
+    const headTxt = hNone ? '이 시점 기록 없음' : hv != null ? hTxt : info, headCol = hNone ? T.mute : vc(hv != null ? hv : iv);
+    if (folded){ ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = headCol; ctx.fillText(headTxt, 16 + nameW, y0 + HDR / 2 + 1); return; }
     // 오른쪽 축 값과 제목줄의 현재 값
     ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = T.mute;
     if (yt.length){ for (const v of yt){ const yy = Y(v); if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.fillText(fmt(v), cw + 4, yy); } }
     else { ctx.fillText(fmt(hi2), cw + 4, top2 + 7); ctx.fillText(fmt(lo2), cw + 4, bot2 - 5); }
     // 제목줄: 커서가 차트·지표 위에 있으면 그 봉의 값, 밖이면 최신 값
-    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = vc(hv != null ? hv : iv); ctx.fillText(hv != null ? hTxt : info, 16 + nameW, y0 + HDR / 2 + 1);
+    ctx.textAlign = 'left'; ctx.font = '600 11px sans-serif'; ctx.fillStyle = headCol; ctx.fillText(headTxt, 16 + nameW, y0 + HDR / 2 + 1);
     // 커서가 가리키는 봉: 그 값의 높이에 작은 점, 커서가 이 지표 안에 있을 때만 옆에 숫자
     if (hv != null && hTxt){
       const hx = Math.round(xOf(hIdx)) + .5;   // 세로 점선과 같은 x
