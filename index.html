@@ -1240,9 +1240,11 @@ function render(){
       });
       // 선마다 따로 높이를 맞춤: 현물은 선물보다 금액이 훨씬 작아 같은 축이면 납작해지므로, 모양(방향·어긋남)을 같은 크기로 비교
       const rng = a => { let l = Math.min(...a), h = Math.max(...a); const pd = (h - l) * .08 || Math.abs(h) * .01 || 1; return [l - pd, h + pd]; };
-      if (ptsS.length){ [lo2, hi2] = rng(ptsS.map(p => p[1])); line(ptsS, '#d81b60'); drawnS = drawn; }
-      [lo2, hi2] = rng(pts.map(p => p[1])); grid();   // 오른쪽 눈금은 선물 기준
+      const fR = rng(pts.map(p => p[1]));
+      [lo2, hi2] = fR; grid();   // 격자·오른쪽 눈금은 선물 기준, 두 선은 격자 위에
       if (lo2 < 0 && hi2 > 0){ ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1; }
+      if (ptsS.length){ [lo2, hi2] = rng(ptsS.map(p => p[1])); line(ptsS, '#d81b60'); drawnS = drawn; }
+      [lo2, hi2] = fR;
       line(pts, '#1f77d0');
       const sg = v => (v >= 0 ? '+' : '') + fmt(v);
       { const v = at(cArr), vs = sArr.length ? at(sArr) : null; info = `선물 ${sg(v)} · 현물 ${vs == null ? '…' : sg(vs)}`; }
@@ -1273,7 +1275,7 @@ function render(){
         const d = drawnS; let sy = d[0][1];
         if (hx >= d[d.length - 1][0]) sy = d[d.length - 1][1];
         else if (hx > d[0][0]) for (let k = 1; k < d.length; k++){ const [x1, y1] = d[k - 1], [x2, y2] = d[k]; if (hx <= x2){ sy = y1 + (y2 - y1) * (hx - x1) / ((x2 - x1) || 1); break; } }
-        ctx.beginPath(); ctx.arc(hx, sy, 1.5, 0, 7); ctx.fillStyle = '#d81b60'; ctx.fill();
+        ctx.beginPath(); ctx.arc(hx, sy, 1.5, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();   // 선물 점과 같은 색이라 분홍 선 위에서도 잘 보임
       }
       if (hover.y >= top2 && hover.y <= bot2 + 2){
       ctx.font = '700 11px sans-serif'; const tw = ctx.measureText(hTxt).width;
