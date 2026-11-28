@@ -30,7 +30,7 @@ header .ref{padding:2px 9px;border:1px solid var(--line);border-radius:999px;fon
 header .ref:hover{background:var(--btn2)}
 /* 레퍼럴 링크 두 개를 같은 자리에 겹쳐 두고 5초마다 짧게 페이드로 교체 */
 header .ref-rot{display:inline-grid}
-header .ref-rot .ref{grid-area:1/1;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s ease}
+header .ref-rot .ref{grid-area:1/1;text-align:center;opacity:0;pointer-events:none;transition:opacity .8s ease}
 header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 @media (prefers-reduced-motion:reduce){header .ref-rot .ref{transition:none}}
 /* 십자선 커서: 라이트=검정, 다크=흰색 */
@@ -1818,13 +1818,13 @@ document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contai
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMenu(); });
 cv.addEventListener('wheel', hideMenu);
 $('toNow').addEventListener('click', () => { if ($('toNow').dataset.mode === 'now') resetView(); else chartDefaults(); });
-{ // 레퍼럴 링크 10초마다 교체
+{ // 레퍼럴 링크 5초마다 교체 (0.8초 동안 서서히 바뀜)
   const refs = [...document.querySelectorAll('.ref-rot .ref')]; let ri = 0;
   setInterval(() => {
     refs[ri].classList.remove('on'); refs[ri].tabIndex = -1;
     ri = (ri + 1) % refs.length;
     refs[ri].classList.add('on'); refs[ri].tabIndex = 0;
-  }, 10000);   // 10초마다 교체
+  }, 5000);
 }
 $('theme').addEventListener('change', e => { ST.theme = e.target.checked ? 'light' : 'dark'; store.set('btcTheme', ST.theme); applyLook(); });
 // 설정 초기화: 모든 선택을 기본값으로
