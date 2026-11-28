@@ -453,6 +453,7 @@ function onKline(k){
   else if (!last || c.t > last.t){ candles.push(c); if (candles.length > MAXN + 2000) candles.shift(); }
   lastPrice = c.c;
   sweepLiq(c.c, c.c);
+  sweepLiq(c.l, c.h, Date.now(), c.t);   // 봉의 고가·저가까지 닿은 것도 소진 (체결을 놓쳤어도)
   dirty = true;
 }
 const forceSeen = new Set();
@@ -503,12 +504,25 @@ function scaleLiq(f){
   for (const [k, e] of liqE){ if (e.end) continue; e.usd *= f; if (e.usd < 1000) liqE.delete(k); }
 }
 // 가격이 닿으면 지우지 않고 소진 시각을 기록 → 그 시점까지만 옅게 그림
-function sweepLiq(lo, hi, t = Date.now()){
+function sweepLiq(lo, hi, t = Date.now(), before = Infinity){   // before: 이 시각 전에 생긴 추정치만 (봉 고가·저가로 지울 때, 그 봉 안에서 새로 생긴 건 제외)
   for (const e of liqE.values()){
-    if (e.end) continue;
+    if (e.end || e.t + 300000 > before) continue;
     if ((e.side === 'L' && e.p >= lo) || (e.side === 'S' && e.p <= hi)) e.end = t;
   }
 }
+// 백그라운드 탭·절전으로 체결 데이터를 놓친 동안 가격이 지나간 청산 추정치도 지움: 최근 1분봉 1000개(약 17시간)의 고가·저가로 다시 확인
+let resweepAt = 0;
+async function resweepLiq(){
+  if (Date.now() - resweepAt < 20000) return; resweepAt = Date.now();
+  try {
+    const r = await fetch(`${FAPI}/fapi/v1/klines?symbol=${SYM}&interval=1m&limit=1000`); if (!r.ok) return;
+    for (const k of await r.json()) sweepLiq(+k[3], +k[2], +k[0], +k[0]);
+    dirty = true;
+  } catch (e){}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) resweepLiq(); });
+window.addEventListener('focus', resweepLiq);
+setInterval(resweepLiq, 300000);
 function pruneLiq(){
   const cut = (candles[0] ? candles[0].t : Date.now()) - 86400000;
   for (const [k, e] of liqE) if (e.end && e.end < cut) liqE.delete(k);
