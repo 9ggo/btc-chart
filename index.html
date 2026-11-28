@@ -139,11 +139,16 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:false, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
 // 하단 지표 패널: 순서·접힘·높이 (브라우저에 기억)
-const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'oi', open:true, h:47 }, { id:'cvd', open:true, h:47 }];   // 실제 그래프 높이(패널-2px) 75:75:45:45
-const PANE_NAME = { vol:'거래량', rsi:'RSI 14', oi:'미결제약정 OI', cvd:'CVD' };
+const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'oi', open:true, h:47 }, { id:'cbp', open:true, h:47 }, { id:'cvd', open:true, h:47 }];   // 실제 그래프 높이(패널-2px) 75:75:45:45
+const PANE_NAME = { vol:'거래량', rsi:'RSI 14', oi:'미결제약정 OI', cbp:'CB 프리미엄', cvd:'CVD' };
 let panes = PANE_DEF();
 try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
-  if (Array.isArray(sv) && sv.length === 4 && PANE_DEF().every(d => sv.some(p => p.id === d.id))) panes = sv.map(p => ({ id:p.id, open:!!p.open, h:Math.max(30, Math.min(400, +p.h || 56)) })); } catch (e){}
+  if (Array.isArray(sv) && sv.length){
+    const ok = sv.filter(p => PANE_DEF().some(d => d.id === p.id)).map(p => ({ id:p.id, open:!!p.open, h:Math.max(30, Math.min(400, +p.h || 56)) }));
+    // 새로 생긴 지표는 기본 위치에 끼워 넣음 (저장된 순서·높이는 유지)
+    PANE_DEF().forEach((d, i) => { if (!ok.some(p => p.id === d.id)) ok.splice(Math.min(i, ok.length), 0, d); });
+    if (ok.length) panes = ok;
+  } } catch (e){}
 const savePanes = () => { try { localStorage.setItem('btcPanes', JSON.stringify(panes)); } catch (e){} };
 let paneHits = [];
 let hover = null;
@@ -199,6 +204,67 @@ function liqText(side){   // 라벨 글자색: 팔레트의 밝은 쪽, 라이�
   return `rgb(${c.map(v => Math.round(v * k)).join(',')})`;
 }
 let candles = [], lastPrice = 0, dirty = true, lastErr = '';
+// ---------- 현물 캔들(바이낸스) · 코인베이스 캔들: 코인베이스 프리미엄 지표와 현물 CVD용 ----------
+// 현물: 지금 봉 간격 그대로 받음(1y는 월봉을 받아 연 단위로 합침). 코인베이스: 봉 마감 시점의 종가만 필요해서 봉 길이를 나누는 가장 큰 단위로 받음
+const XS = { iv:'', spot:new Map(), spFrom:Infinity, spTo:0, spAt:0, cbG:0, cb:new Map(), cbT:[], cbFrom:Infinity, cbTo:0, cbAt:0, busy:false };
+const CB_GRAN = [86400, 21600, 3600, 900, 300, 60];
+function xsReset(){
+  const iv = ST.interval, sec = IV_MIN[iv] * 60;
+  Object.assign(XS, { iv, spot:new Map(), spFrom:Infinity, spTo:0, spAt:0, cb:new Map(), cbT:[], cbFrom:Infinity, cbTo:0, cbAt:0 });
+  XS.cbG = iv === '1M' || iv === '1y' || iv === '1w' ? 86400 : CB_GRAN.find(g => g <= sec && sec % g === 0) || 60;
+}
+async function xsSpot(startTime, endTime){
+  const iv = XS.iv === '1y' ? '1M' : XS.iv;
+  let u = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${iv}&limit=1000`;
+  if (startTime != null) u += `&startTime=${startTime}`; if (endTime != null) u += `&endTime=${endTime}`;
+  const r = await fetch(u); if (!r.ok) throw 0;
+  const a = (await r.json()).map(k => ({ t:k[0], c:+k[4], qv:+k[7] || +k[5] * +k[4], tq:+k[10] || +k[9] * +k[4] }));
+  if (XS.iv !== ST.interval) return;
+  for (const k of a) XS.spot.set(k.t, k);
+  if (a.length){ XS.spFrom = Math.min(XS.spFrom, a[0].t); XS.spTo = Math.max(XS.spTo, a[a.length - 1].t); }
+  return a.length;
+}
+async function xsCb(endMs){
+  const g = XS.cbG, start = endMs - g * 1000 * 299;
+  const u = `https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=${g}&start=${new Date(start).toISOString()}&end=${new Date(endMs).toISOString()}`;
+  const r = await fetch(u); if (!r.ok) throw 0;
+  const a = await r.json();   // [시각(초), 저가, 고가, 시가, 종가, 거래량], 최신순
+  if (XS.iv !== ST.interval || XS.cbG !== g) return;
+  for (const k of a) XS.cb.set(k[0] * 1000, k[4]);
+  XS.cbT = [...XS.cb.keys()].sort((x, y) => x - y);
+  XS.cbFrom = Math.min(XS.cbFrom, start); XS.cbTo = Math.max(XS.cbTo, endMs);
+  return a.length;
+}
+// 시각 e 이전에 시작한 가장 최근 코인베이스 캔들의 종가
+function cbCloseBefore(e){
+  const T = XS.cbT; let lo = 0, hi = T.length - 1, ans = -1;
+  while (lo <= hi){ const m = (lo + hi) >> 1; if (T[m] < e){ ans = m; lo = m + 1; } else hi = m - 1; }
+  return ans < 0 || e - T[ans] > Math.max(IV_MIN[XS.iv] * 60000, XS.cbG * 1000) * 1.01 ? null : XS.cb.get(T[ans]);
+}
+// 봉(시각 t)의 현물 값 — 1y는 그해 월봉을 합침
+function spotOf(t){
+  if (XS.iv !== '1y') return XS.spot.get(t);
+  const y = new Date(t).getUTCFullYear(); let c = null, qv = 0, tq = 0, n = 0;
+  for (const [mt, k] of XS.spot) if (new Date(mt).getUTCFullYear() === y){ qv += k.qv; tq += k.tq; n++; if (!c || mt > c.t) c = k; }
+  return n ? { t, c:c.c, qv, tq } : null;
+}
+// 5초마다 한 번: 최신 갱신(현물 15초·코인베이스 30초 간격) 또는 화면 왼쪽까지 과거 채우기, 한 번에 요청 하나씩만
+let xsNeedFrom = 0;
+async function xsTick(){
+  if (XS.busy) return;
+  if (XS.iv !== ST.interval) xsReset();
+  const now = Date.now(); XS.busy = true;
+  try {
+    if (now - XS.spAt > 15000){ XS.spAt = now; await xsSpot(XS.spTo ? XS.spTo : null, null); }
+    else if (now - XS.cbAt > 30000){ XS.cbAt = now; await xsCb(now); }
+    else if (xsNeedFrom && xsNeedFrom < XS.spFrom && isFinite(XS.spFrom)){ const n = await xsSpot(null, XS.spFrom - 1); if (!n) XS.spFrom = -Infinity; }
+    else if (xsNeedFrom && xsNeedFrom < XS.cbFrom && isFinite(XS.cbFrom) && XS.cbFrom > Date.UTC(2015, 0, 1)){ const n = await xsCb(XS.cbFrom); if (!n) XS.cbFrom = -Infinity; }
+    else { XS.busy = false; return; }
+    dirty = true;
+  } catch (e){}
+  XS.busy = false;
+}
+setInterval(xsTick, 1200);
 const forces = [];                       // 실제 체결된 청산 (forceOrder)
 const liqE = new Map(); // 추정 청산 매물: {side, p, t(생긴 시각), usd, end(가격이 닿아 소진된 시각, 0=미소진)}
 let lastOI = null, liqReady = false;
@@ -637,6 +703,7 @@ function render(){
   const plotW = cw - 56, slot = plotW / ST.n; viewSlot = slot; const _s = slot, bw = Math.max(1, _s * 0.7), off = ST.n - (vis.length - ex) + frac;
   const xOf = i => (off + i) * slot + slot / 2;
   const tStep = vis.length > 1 ? vis[1].t - vis[0].t : 60000, t0 = vis[0].t;
+  xsNeedFrom = t0;
   const xT = t => Math.max(0, Math.min(cw, (off + (t - t0) / tStep) * slot));   // 시각 → x
   const hIdx = hover && hover.x >= 0 && hover.x <= cw ? Math.max(0, Math.min(vis.length - 1, Math.round((hover.x - slot / 2) / slot - off))) : -1;
 
@@ -1111,15 +1178,45 @@ function render(){
         if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht && o.t >= t0 - tStep * 2); if (pr.length){ hv = pr[pr.length - 1].v; hTxt = fu(hv); } }
         const a = pts[0][1]; info = `${fu(b)} (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
       } else info = ST.xOff > 0 ? '이 구간 기록 없음 (최근 약 30일까지만 제공)' : '불러오는 중…';
+    } else if (pn.id === 'cbp'){
+      // 코인베이스 프리미엄: 봉 마감 시점의 (코인베이스 BTC-USD − 바이낸스 현물 BTCUSDT) / 바이낸스 × 100. 최신 봉은 실시간 값
+      const pts = [], arr = [], newest = vis.length && vis[vis.length - 1].t === candles[candles.length - 1].t;
+      vis.forEach((c, i) => {
+        let v = null;
+        if (newest && i === vis.length - 1){ const ref = binanceSpotMid(); if (cbPrice && ref) v = (cbPrice - ref) / ref * 100; }
+        else { const e = i + 1 < vis.length ? vis[i + 1].t : c.t + IV_MIN[ST.interval] * 60000, cb = cbCloseBefore(e), sp = spotOf(c.t); if (cb && sp && sp.c) v = (cb - sp.c) / sp.c * 100; }
+        if (v != null && isFinite(v)){ pts.push([xOf(i), v]); arr[i] = v; }
+      });
+      fmt = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(Math.abs(v) >= 1 ? 2 : 3) + '%';
+      if (pts.length){
+        lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || .01; lo2 -= pad; hi2 += pad; grid();
+        const y0v = Y(0);
+        ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, y0v); ctx.lineTo(cw, y0v); ctx.stroke(); ctx.globalAlpha = 1;
+        // 0보다 위(코인베이스가 비쌈 = 미국 현물 매수 우위)는 초록, 아래는 빨강으로 칠함
+        for (const [clipY0, clipY1, col] of [[top2, y0v, 'rgba(38,166,154,.28)'], [y0v, bot2, 'rgba(239,83,80,.28)']]){
+          ctx.save(); ctx.beginPath(); ctx.rect(0, clipY0, cw, clipY1 - clipY0); ctx.clip();
+          ctx.beginPath(); ctx.moveTo(pts[0][0], y0v); for (const [x, v] of pts) ctx.lineTo(Math.min(cw, x), Y(v)); ctx.lineTo(Math.min(cw, pts[pts.length - 1][0]), y0v); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
+        }
+        line(pts, '#5e6ad2', 1.4);
+        info = fmt(pts[pts.length - 1][1]);
+        if (hIdx >= 0 && arr[hIdx] != null){ hv = arr[hIdx]; hTxt = fmt(hv); }
+      } else info = '불러오는 중…';
     } else if (pn.id === 'cvd'){
-      // CVD: 화면 왼쪽 끝부터 누적한 (시장가 매수 - 시장가 매도) 거래량
-      let cum = 0; const pts = [], cArr = [];
-      vis.forEach((c, i) => { cum += 2 * (c.tq || 0) - (c.qv || 0); pts.push([xOf(i), cum]); cArr[i] = cum; });
-      lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad; grid();
+      // CVD 두 줄: 선물(파랑)과 현물(분홍)을 화면 왼쪽 끝부터 누적한 (시장가 매수 − 시장가 매도) 거래량
+      // 선물만 오르고 현물이 안 따라오면 레버리지 위주의 움직임, 같이 오르면 실수요 매수
+      let cum = 0, cumS = 0, hasS = false; const pts = [], cArr = [], ptsS = [], sArr = [];
+      vis.forEach((c, i) => {
+        cum += 2 * (c.tq || 0) - (c.qv || 0); pts.push([xOf(i), cum]); cArr[i] = cum;
+        const sp = spotOf(c.t); if (sp){ cumS += 2 * sp.tq - sp.qv; hasS = true; } if (hasS){ ptsS.push([xOf(i), cumS]); sArr[i] = cumS; }
+      });
+      const all = pts.concat(ptsS).map(p => p[1]);
+      lo2 = Math.min(0, ...all); hi2 = Math.max(0, ...all); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad; grid();
       ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1;
-      line(pts, '#1f77d0', 1.5);
-      { const v = at(cArr); info = (v >= 0 ? '+' : '') + fmt(v); }
-      if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = (hv >= 0 ? '+' : '') + fmt(hv); }
+      if (ptsS.length) line(ptsS, '#d81b60', 1.4);
+      line(pts, '#1f77d0', 1.5);   // 커서 점은 선물 선 위에
+      const sg = v => (v >= 0 ? '+' : '') + fmt(v);
+      { const v = at(cArr), vs = sArr.length ? at(sArr) : null; info = `선물 ${sg(v)} · 현물 ${vs == null ? '…' : sg(vs)}`; }
+      if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = `선물 ${sg(hv)}` + (sArr[hIdx] != null ? ` · 현물 ${sg(sArr[hIdx])}` : ''); }
     }
     ctx.restore();
     // 오른쪽 축 값과 제목줄의 현재 값
