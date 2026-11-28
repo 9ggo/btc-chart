@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@500,700,900&display=swap" rel="stylesheet">
 <title>BTC 선물 매물대 차트</title>
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--btn:#21262d;--btn2:#30363d;--bid:#26a69a;--ask:#ef5350}
 :root[data-theme=light]{--bg:#c9cfd5;--panel:#bdc4cb;--line:#a3abb4;--ink:#161a1f;--dim:#2f363d;--btn:#d8dde2;--btn2:#c4cad0}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+/* 영문·숫자는 Satoshi, 한글은 나눔스퀘어 네오 (Satoshi에 없는 글자는 다음 글꼴로 넘어감) */
+@font-face{font-family:"NanumSquareNeo";src:url("NanumSquareNeo-Bd.woff2") format("woff2"),url("https://9ggo.github.io/btc-chart/NanumSquareNeo-Bd.woff2") format("woff2");font-weight:100 900;font-display:swap}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 "Satoshi","NanumSquareNeo",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+select,input{font-family:inherit}
 body{display:flex;flex-direction:column}
 #toNow{position:absolute;z-index:4;width:34px;height:34px;padding:0;display:grid;place-items:center;border-radius:50%;background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.9}
 #toNow[hidden],#foldAllBtn[hidden]{display:none}
@@ -219,6 +224,13 @@ function liqText(side){   // 라벨 글자색: 팔레트의 밝은 쪽, 라이�
   return `rgb(${c.map(v => Math.round(v * k)).join(',')})`;
 }
 let candles = [], lastPrice = 0, dirty = true, lastErr = '';
+// 차트(캔버스) 글자도 같은 글꼴로: 코드 곳곳의 'sans-serif'를 글꼴 목록으로 바꿔 줌
+const FONT_STACK = '"Satoshi", "NanumSquareNeo", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+{ const C2 = typeof CanvasRenderingContext2D !== 'undefined' && CanvasRenderingContext2D.prototype, d = C2 && Object.getOwnPropertyDescriptor(C2, 'font');
+  if (d && d.set) Object.defineProperty(C2, 'font', { configurable:true, get(){ return d.get.call(this); }, set(v){ d.set.call(this, typeof v === 'string' ? v.replace(/sans-serif\s*$/, FONT_STACK) : v); } }); }
+if (document.fonts && document.fonts.load){   // 글꼴을 다 받으면 차트를 다시 그림 (그 전엔 기본 글꼴로 보임)
+  Promise.all(['500 12px "Satoshi"', '700 12px "Satoshi"', '700 12px "NanumSquareNeo"'].map(f => document.fonts.load(f, '가1'))).then(() => { dirty = true; }).catch(() => {});
+}
 // ---------- 현물 캔들(바이낸스) · 코인베이스 캔들: 코인베이스 프리미엄 지표와 현물 CVD용 ----------
 // 현물: 지금 봉 간격 그대로 받음(1y는 월봉을 받아 연 단위로 합침). 코인베이스: 봉 마감 시점의 종가만 필요해서 봉 길이를 나누는 가장 큰 단위로 받음
 const XS = { iv:'', spot:new Map(), spFrom:Infinity, spTo:0, spAt:0, cbG:0, cb:new Map(), cbT:[], cbFrom:Infinity, cbTo:0, cbAt:0, busy:false };
