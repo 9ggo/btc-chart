@@ -1201,7 +1201,7 @@ function render(){
       { const tail = pts.filter(p => p[0] > xEnd); pts = pts.filter(p => p[0] <= xEnd); if (tail.length) pts.push([xEnd, tail[tail.length - 1][1]]); pts.forEach(p => { p[0] = Math.min(cw, p[0]); }); }
       if (pts.length){
         lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad; grid();
-        line(pts, '#d18b00', 1.5);
+        line(pts, '#d18b00');
         const b = pts[pts.length - 1][1];
         if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht && o.t >= t0 - tStep * 2); if (pr.length){ hv = pr[pr.length - 1].v; hTxt = fu(hv); } }
         const a = pts[0][1]; info = `${fu(b)} (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
@@ -1220,12 +1220,12 @@ function render(){
         lo2 = Math.min(0, ...pts.map(p => p[1])); hi2 = Math.max(0, ...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || .01; lo2 -= pad; hi2 += pad; grid();
         const y0v = Y(0);
         ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, y0v); ctx.lineTo(cw, y0v); ctx.stroke(); ctx.globalAlpha = 1;
-        // 0선과 선 사이를 회색으로 칠함 (값의 색은 제목줄 숫자로)
-        for (const [clipY0, clipY1, col] of [[top2, y0v, 'rgba(128,128,134,.30)'], [y0v, bot2, 'rgba(128,128,134,.18)']]){   // 무채색: 0 위는 조금 진하게, 아래는 옅게
+        // 0보다 위(미국 현물 매수 우위)는 초록, 아래는 빨강으로 칠함 (선은 무채색)
+        for (const [clipY0, clipY1, col] of [[top2, y0v, 'rgba(38,166,154,.28)'], [y0v, bot2, 'rgba(239,83,80,.28)']]){
           ctx.save(); ctx.beginPath(); ctx.rect(0, clipY0, cw, clipY1 - clipY0); ctx.clip();
           ctx.beginPath(); ctx.moveTo(pts[0][0], y0v); for (const [x, v] of pts) ctx.lineTo(Math.min(cw, x), Y(v)); ctx.lineTo(Math.min(cw, pts[pts.length - 1][0]), y0v); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
         }
-        line(pts, T.inkS, 1.4);
+        line(pts, T.inkS);
         info = fmt(pts[pts.length - 1][1]); iv = pts[pts.length - 1][1];
         vc = v => v == null ? T.ink : v >= 0 ? '#0f9d58' : '#d93025';   // + 초록, − 빨강 (ETF 박스와 같은 색)
         if (hIdx >= 0 && arr[hIdx] != null){ hv = arr[hIdx]; hTxt = fmt(hv); }
@@ -1240,10 +1240,10 @@ function render(){
       });
       // 선마다 따로 높이를 맞춤: 현물은 선물보다 금액이 훨씬 작아 같은 축이면 납작해지므로, 모양(방향·어긋남)을 같은 크기로 비교
       const rng = a => { let l = Math.min(...a), h = Math.max(...a); const pd = (h - l) * .08 || Math.abs(h) * .01 || 1; return [l - pd, h + pd]; };
-      if (ptsS.length){ [lo2, hi2] = rng(ptsS.map(p => p[1])); line(ptsS, '#d81b60', 1.4); drawnS = drawn; }
+      if (ptsS.length){ [lo2, hi2] = rng(ptsS.map(p => p[1])); line(ptsS, '#d81b60'); drawnS = drawn; }
       [lo2, hi2] = rng(pts.map(p => p[1])); grid();   // 오른쪽 눈금은 선물 기준
       if (lo2 < 0 && hi2 > 0){ ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1; }
-      line(pts, '#1f77d0', 1.5);
+      line(pts, '#1f77d0');
       const sg = v => (v >= 0 ? '+' : '') + fmt(v);
       { const v = at(cArr), vs = sArr.length ? at(sArr) : null; info = `선물 ${sg(v)} · 현물 ${vs == null ? '…' : sg(vs)}`; }
       if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = `선물 ${sg(hv)}` + (sArr[hIdx] != null ? ` · 현물 ${sg(sArr[hIdx])}` : ''); }
