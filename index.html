@@ -29,9 +29,9 @@ header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 header .mk{padding:2px 9px;border:1px solid var(--line);border-radius:7px;background:var(--btn);font-size:14px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
 header .mk b{color:var(--ink)}
 header .mk .up{color:#0f9d58}header .mk .dn{color:#d93025}
-#mkEtf{cursor:pointer;position:relative}
+#mkEtf,#mkUsdt{cursor:pointer}
 #etfPop{position:fixed;z-index:50;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--btn);box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:13px;font-weight:600;line-height:1.6;white-space:pre;font-variant-numeric:tabular-nums}
-#etfPop .up{color:#0f9d58}#etfPop .dn{color:#d93025}
+#etfPop .up{color:#0f9d58}#etfPop .dn{color:#d93025}#etfPop .kup{color:#e5322d}#etfPop .kdn{color:#1f6fe5}
 header .mk b.fu{color:#e5322d}header .mk b.fd{color:#1f6fe5}
 header .mk b{transition:color .25s}
 header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
@@ -87,7 +87,7 @@ footer.folded{display:none}
   <label title="실제 청산 삼각형 표시 (끄면 금액 숫자만 남음)" style="cursor:pointer"><input id="triOn" type="checkbox" checked style="cursor:pointer;margin:0 3px 0 0;vertical-align:-2px">청산 ▲▼</label>
   <button id="reset" type="button">Reset</button>
   <div class="right">
-  <span class="mk" id="mkUsdt" title="업비트 테더(USDT) 원화 가격">USDT ₩—</span>
+  <span class="mk" id="mkUsdt">USDT ₩—</span>
     <span class="mk" id="mkEtf" >ETF —</span>
     <span class="ref-rot"><a class="ref on" href="https://www.okx.com/join/JOUFKKAL" target="_blank" rel="noopener">Join OKX</a><a class="ref" href="https://www.gate.com/signup/XRWNFFZKLF?ref_type=103" target="_blank" rel="noopener" tabindex="-1">Join Gate</a></span>
     <label class="switch"><span>다크</span><input id="theme" type="checkbox" role="switch" aria-label="라이트 모드"><i></i><span>라이트</span></label>
@@ -1452,6 +1452,7 @@ changeInterval(ST.interval).then(initLiq);
 setInterval(pollOI, 15000);
 
 /* ---------------- 상단 시세: 테더 원화 가격, 코인베이스 프리미엄 ---------------- */
+let usdtPrev = null;   // 테더 전일 종가 (업비트 기준 오전 9시 마감)
 let usdtKrw = null, cbPrice = null, usdtFlash = '', usdtFlashTimer = 0;
 // 테더 가격이 바뀌면 숫자를 잠깐 색칠: 오르면 빨강, 내리면 파랑
 function setUsdt(v){
@@ -1459,7 +1460,7 @@ function setUsdt(v){
   if (usdtKrw){ usdtFlash = v > usdtKrw ? 'fu' : 'fd'; clearTimeout(usdtFlashTimer); usdtFlashTimer = setTimeout(() => { usdtFlash = ''; drawUsdt(); }, 900); }
   usdtKrw = v; drawUsdt();
 }
-function drawUsdt(){ $('mkUsdt').innerHTML = usdtKrw ? `USDT <b class="${usdtFlash}">₩${usdtKrw.toLocaleString('ko-KR', { maximumFractionDigits:1 })}</b>` : 'USDT ₩—'; }
+function drawUsdt(){ $('mkUsdt').innerHTML = usdtKrw ? `USDT <b class="${usdtFlash}">₩${usdtKrw.toLocaleString('ko-KR', { maximumFractionDigits:1 })}</b>` : 'USDT ₩—'; if (popFor === 'mkUsdt' && popEl){ const h = POP.mkUsdt(); if (h) popEl.innerHTML = h; } }
 // 테더 원화: 업비트 웹소켓(브라우저에서 바로 받을 수 있음), 업비트가 30초 넘게 조용하면 빗썸 웹소켓 값 사용
 let upbitAt = 0;
 (function upbit(){
@@ -1467,11 +1468,11 @@ let upbitAt = 0;
   try { ws = new WebSocket('wss://api.upbit.com/websocket/v1'); } catch (e){ setTimeout(upbit, 5000); return; }
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => ws.send(JSON.stringify([{ ticket:'btc-chart' }, { type:'ticker', codes:['KRW-USDT'] }]));
-  ws.onmessage = ev => { try { const j = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data)); if (j.trade_price){ setUsdt(+j.trade_price); upbitAt = Date.now(); } } catch (e){} };
+  ws.onmessage = ev => { try { const j = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data)); if (j.trade_price){ if (+j.prev_closing_price) usdtPrev = +j.prev_closing_price; setUsdt(+j.trade_price); upbitAt = Date.now(); } } catch (e){} };
   ws.onclose = () => setTimeout(upbit, 3000); ws.onerror = () => ws.close();
 })();
 openWS('wss://pubwss.bithumb.com/pub/ws', m => {
-  const c = m && m.content; if (c && c.symbol === 'USDT_KRW' && +c.closePrice && Date.now() - upbitAt > 30000) setUsdt(+c.closePrice);
+  const c = m && m.content; if (c && c.symbol === 'USDT_KRW' && +c.closePrice && Date.now() - upbitAt > 30000){ if (+c.prevClosePrice) usdtPrev = +c.prevClosePrice; setUsdt(+c.closePrice); }
 }, ws => ws.send(JSON.stringify({ type:'ticker', symbols:['USDT_KRW'], tickTypes:['24H'] })));
 // 코인베이스 BTC-USD: 웹소켓으로 실시간, 끊겼을 때를 대비해 10초마다 REST로도 확인
 let cbWsAt = 0;
@@ -1490,21 +1491,27 @@ function binanceSpotMid(){   // 바이낸스 현물 호가 중간값 (없으면 
   return isFinite(bb) && isFinite(ba) && ba > bb ? (bb + ba) / 2 : lastPrice;
 }
 // 미국 현물 ETF 전일 순유입: GitHub Actions가 하루 세 번 Farside에서 받아 저장한 etf.json을 읽음
-// 최근 5거래일: 탭(터치)·클릭하면 열고 닫음, 마우스는 올리면 열림
-let etfRecent = [], etfPop = null;
-function showEtfPop(on){
-  if (etfPop){ etfPop.remove(); etfPop = null; }
-  if (!on || !etfRecent.length) return;
-  etfPop = document.createElement('div'); etfPop.id = 'etfPop';
-  etfPop.innerHTML = etfRecent.map(r => { const [, m, d] = r.date.split('-'); return `${+m}/${+d} <span class="${r.total >= 0 ? 'up' : 'dn'}">${r.total >= 0 ? '+' : '-'}${Math.round(Math.abs(r.total))}M</span>`; }).join('\n');
-  document.body.appendChild(etfPop);
-  const b = $('mkEtf').getBoundingClientRect(), w = etfPop.offsetWidth;
-  etfPop.style.top = (b.bottom + 6) + 'px'; etfPop.style.left = Math.max(6, Math.min(innerWidth - w - 6, b.left + b.width / 2 - w / 2)) + 'px';
+// 상단 박스 팝업 (ETF 최근 5거래일, 테더 전일 대비): 탭(터치)·클릭하면 열고 닫음, 마우스는 올리면 열림
+let etfRecent = [], popEl = null, popFor = '';
+const POP = {
+  mkEtf: () => etfRecent.length ? etfRecent.map(r => { const [, m, d] = r.date.split('-'); return `${+m}/${+d} <span class="${r.total >= 0 ? 'up' : 'dn'}">${r.total >= 0 ? '+' : '-'}${Math.round(Math.abs(r.total))}M</span>`; }).join('\n') : '',
+  mkUsdt: () => { if (!usdtKrw || !usdtPrev) return ''; const d = usdtKrw - usdtPrev, c = d > 0 ? 'kup' : d < 0 ? 'kdn' : '', f = v => v.toLocaleString('ko-KR', { maximumFractionDigits:1 });
+    return `전일 종가 ₩${f(usdtPrev)}\n<span class="${c}">${d > 0 ? '+' : d < 0 ? '-' : ''}₩${f(Math.abs(d))} (${d > 0 ? '+' : d < 0 ? '-' : ''}${Math.abs(d / usdtPrev * 100).toFixed(2)}%)</span>`; },
+};
+function showPop(id){
+  if (popEl){ popEl.remove(); popEl = null; popFor = ''; }
+  const html = id && POP[id](); if (!html) return;
+  popEl = document.createElement('div'); popEl.id = 'etfPop'; popEl.innerHTML = html; popFor = id;
+  document.body.appendChild(popEl);
+  const b = $(id).getBoundingClientRect(), w = popEl.offsetWidth;
+  popEl.style.top = (b.bottom + 6) + 'px'; popEl.style.left = Math.max(6, Math.min(innerWidth - w - 6, b.left + b.width / 2 - w / 2)) + 'px';
 }
-$('mkEtf').addEventListener('click', e => { e.stopPropagation(); showEtfPop(!etfPop); });
-$('mkEtf').addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') showEtfPop(true); });
-$('mkEtf').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') showEtfPop(false); });
-document.addEventListener('click', () => { if (etfPop) showEtfPop(false); });
+for (const id of ['mkEtf', 'mkUsdt']){
+  $(id).addEventListener('click', e => { e.stopPropagation(); showPop(popFor === id ? '' : id); });
+  $(id).addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') showPop(id); });
+  $(id).addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') showPop(''); });
+}
+document.addEventListener('click', () => { if (popEl) showPop(''); });
 async function loadEtf(){
   for (const u of ['etf.json', 'https://9ggo.github.io/btc-chart/etf.json']){
     try {
