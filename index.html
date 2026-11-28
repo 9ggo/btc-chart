@@ -12,7 +12,8 @@
 *{box-sizing:border-box}
 /* 영문·숫자는 Satoshi, 한글은 나눔스퀘어 네오 (Satoshi에 없는 글자는 다음 글꼴로 넘어감) */
 @font-face{font-family:"NanumSquareNeo";src:url("NanumSquareNeo-Bd.woff2") format("woff2"),url("https://9ggo.github.io/btc-chart/NanumSquareNeo-Bd.woff2") format("woff2");font-weight:100 900;font-display:swap}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 "Satoshi","NanumSquareNeo",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 "Satoshi","NanumSquareNeo",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;letter-spacing:-.025em}   /* 두 글꼴 모두 기본 자간이 넓은 편이라 살짝 좁힘 */
+button,select,input{letter-spacing:inherit}
 select,input{font-family:inherit}
 body{display:flex;flex-direction:column}
 #toNow{position:absolute;z-index:4;width:34px;height:34px;padding:0;display:grid;place-items:center;border-radius:50%;background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.9}
@@ -227,7 +228,8 @@ let candles = [], lastPrice = 0, dirty = true, lastErr = '';
 // 차트(캔버스) 글자도 같은 글꼴로: 코드 곳곳의 'sans-serif'를 글꼴 목록으로 바꿔 줌
 const FONT_STACK = '"Satoshi", "NanumSquareNeo", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 { const C2 = typeof CanvasRenderingContext2D !== 'undefined' && CanvasRenderingContext2D.prototype, d = C2 && Object.getOwnPropertyDescriptor(C2, 'font');
-  if (d && d.set) Object.defineProperty(C2, 'font', { configurable:true, get(){ return d.get.call(this); }, set(v){ d.set.call(this, typeof v === 'string' ? v.replace(/sans-serif\s*$/, FONT_STACK) : v); } }); }
+  if (d && d.set) Object.defineProperty(C2, 'font', { configurable:true, get(){ return d.get.call(this); }, set(v){ d.set.call(this, typeof v === 'string' ? v.replace(/sans-serif\s*$/, FONT_STACK) : v);
+    if ('letterSpacing' in this && typeof v === 'string'){ const m = v.match(/([\d.]+)px/); if (m) this.letterSpacing = (-0.025 * +m[1]).toFixed(2) + 'px'; } } }); }   // 차트 글자도 자간 살짝 좁힘 (지원하는 브라우저만)
 if (document.fonts && document.fonts.load){   // 글꼴을 다 받으면 차트를 다시 그림 (그 전엔 기본 글꼴로 보임)
   Promise.all(['500 12px "Satoshi"', '700 12px "Satoshi"', '700 12px "NanumSquareNeo"'].map(f => document.fonts.load(f, '가1'))).then(() => { dirty = true; }).catch(() => {});
 }
