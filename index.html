@@ -1022,7 +1022,7 @@ function render(){
     ctx.textAlign = 'right'; ctx.font = '500 11px sans-serif';
     for (let i = ghosts.length - 1; i >= 0; i--){
       const g = ghosts[i], a = 1 - (now - g.t) / GHOST_MS;
-      if (a <= 0 || g.B !== B) continue;
+      if (a <= 0) continue;   // 구간 크기가 바뀌어도(줌) 계속 표시 — 위치는 그 벽의 가운데 가격
       const ym = y(g.pLo + g.B / 2);
       if (ym < top + 8 || ym > bot - 8) continue;
       const t = `${g.kind} ${fu(g.peak * (g.pLo + g.B / 2))} (${fdur(g.age)} 유지)`;
