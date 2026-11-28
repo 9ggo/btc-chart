@@ -1345,7 +1345,7 @@ function render(){
   // ---------- 커서 위치 정보: 세로·가로 선, 그 봉의 시가·고가·저가·종가, 가격·시각 표시 ----------
   if (hIdx >= 0 && vis[hIdx]){
     const c = vis[hIdx], hx = Math.round(xOf(hIdx)) + .5;
-    ctx.save(); ctx.strokeStyle = ST.theme === 'light' ? '#000' : '#fff'; ctx.globalAlpha = .75; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;   // 십자선: 라이트=검정, 다크=흰색
+    ctx.save(); ctx.strokeStyle = ST.theme === 'light' ? '#000' : '#fff'; ctx.globalAlpha = .5; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;   // 십자선: 라이트=검정, 다크=흰색 (살짝 연하게)
     ctx.beginPath(); ctx.moveTo(hx, top); ctx.lineTo(hx, H); ctx.stroke();
     const inMain = hover.y >= top && hover.y <= bot;
     if (inMain){ ctx.beginPath(); ctx.moveTo(0, Math.round(hover.y) + .5); ctx.lineTo(cw + 2, Math.round(hover.y) + .5); ctx.stroke(); }
@@ -1356,7 +1356,7 @@ function render(){
       const txt = pv.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
       ctx.font = '700 11px sans-serif'; ctx.textAlign = 'right'; const tw = ctx.measureText(txt).width;
       const PW = 18, bx = cw + 2;   // 호가창 쪽에 표시: 왼쪽 + 버튼 칸, 오른쪽 숫자
-      ctx.fillStyle = T.inkS; ctx.fillRect(bx, hover.y - 9, tw + 8 + PW, 18);
+      ctx.fillStyle = T.ink; ctx.fillRect(bx, hover.y - 9, tw + 8 + PW, 18);   // 배경은 완전한 검정·흰색보다 살짝 연한 색
       ctx.fillStyle = T.bg; ctx.textAlign = 'left'; ctx.fillText(txt, bx + PW + 4, hover.y); ctx.textAlign = 'right';
       ctx.fillRect(bx + PW, hover.y - 6, 1, 12);   // 구분선
       ctx.strokeStyle = T.bg; ctx.lineWidth = 1.6; ctx.beginPath();
@@ -1371,7 +1371,7 @@ function render(){
     { // 시간축의 시각
       const d = new Date(c.t), txt = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; const tw = ctx.measureText(txt).width, tx = Math.max(tw / 2 + 4, Math.min(cw - tw / 2 - 4, hx));
-      ctx.fillStyle = T.inkS; ctx.fillRect(tx - tw / 2 - 5, axTop + 4, tw + 10, AX - 8); ctx.fillStyle = T.bg; ctx.fillText(txt, tx, axTop + AX / 2);
+      ctx.fillStyle = T.ink; ctx.fillRect(tx - tw / 2 - 5, axTop + 4, tw + 10, AX - 8); ctx.fillStyle = T.bg; ctx.fillText(txt, tx, axTop + AX / 2);
     }
     { // 왼쪽 위: 시가·고가·저가·종가
       const f = v => v.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
