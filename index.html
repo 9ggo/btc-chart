@@ -1543,7 +1543,7 @@ async function loadEtf(){
       const v = last.total, cls = v >= 0 ? 'up' : 'dn', sg = v >= 0 ? '+' : '−', a = Math.abs(v);
       const amt = a >= 1000 ? '$' + (a / 1000).toFixed(2) + 'B' : '$' + a.toFixed(1) + 'M';
       const [, mm, dd] = last.date.split('-');
-      $('mkEtf').innerHTML = `ETF <span style="opacity:.7">${+mm}/${+dd}</span> <b class="${cls}">${sg}${amt}</b>`;
+      $('mkEtf').innerHTML = `ETF ${+mm}/${+dd} <b class="${cls}">${sg}${amt}</b>`;
       etfRecent = j.rows.slice(-6, -1).reverse();   // 박스에 나온 최근일은 빼고, 그 전 5거래일을 최신순으로
       return;
     } catch (e){}
