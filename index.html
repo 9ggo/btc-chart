@@ -131,7 +131,7 @@ footer.folded{display:none}
       <div class="row"><dt>Ctrl + 휠</dt><dd>가격축만 확대·축소합니다.</dd></div>
       <div class="row"><dt>길게 누르기 (터치)</dt><dd>손가락을 잠깐 누르고 있다가 움직이면 차트는 그대로 두고 십자선만 따라 움직입니다. 펜은 바로 십자선이 움직입니다.</dd></div>
       <div class="row"><dt>더블클릭 · 두 번 탭</dt><dd>차트의 비율을 유지한 채 현재가로 돌아옵니다. 한 번 더 하면 차트 기본값으로 돌아갑니다. 차트 오른쪽 아래 버튼도 같은 순서로 동작합니다.</dd></div>
-      <div class="row"><dt>우클릭</dt><dd>"현재로 이동"은 확대 비율을 유지한 채 최신 캔들로, "차트 기본값으로"는 봉 개수와 가격축을 기본 상태로 되돌립니다.</dd></div>
+      <div class="row"><dt>우클릭</dt><dd>"현재로 이동"은 확대 비율을 유지한 채 최신 캔들로, "차트 기본값으로"는 봉 개수·가격축·구간·범위·최소 규모를 기본값으로 되돌립니다(오른쪽 아래 ↺ 버튼과 같음).</dd></div>
       <div class="row"><dt>Reset</dt><dd>다크/라이트 모드와 설명 접기 상태를 뺀 모든 설정을 기본값으로 되돌립니다.</dd></div>
     </dl></section>
     <p class="disc">이 사이트는 바이낸스·업비트·빗썸·코인베이스의 공개 데이터와 Farside Investors의 ETF 집계를 보여주는 참고용 도구이며 투자 조언이 아닙니다. 청산 매물대는 추정치이고, ETF 수치는 집계 시점에 따라 늦거나 바뀔 수 있습니다. Join OKX·Join Gate는 레퍼럴 링크입니다.<br>This site is a reference tool showing public data from Binance, Upbit, Bithumb and Coinbase and ETF flow data from Farside Investors, and is not investment advice. Liquidation levels are estimates, and ETF figures may be delayed or revised. Join OKX and Join Gate are referral links.</p>
@@ -1600,8 +1600,9 @@ $('n').addEventListener('change', e => { setN(+e.target.value); redraw(); });
 let raf = 0;
 function redraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; depthCache = null; dirty = false; safeRender(); }); }
 // 두 번 탭/더블클릭: 확대해 둔 세로 비율은 유지한 채 최신 캔들·현재가 가운데로.
-// 이미 그 상태에서 한 번 더 하면 자동 맞춤으로.
+// 이미 그 상태에서 한 번 더 하면 차트 기본값으로 (봉 개수 포함).
 function resetView(){
+  if (!ST.view && ST.xOff < 0.5){ chartDefaults(); return; }
   // 세로 비율을 직접 바꾼 적이 있을 때만 그 비율을 유지 (드래그로 옮기기만 했다면 자동 맞춤으로)
   if (ST.view) ST.span = ST.scaled ? ST.view.hi - ST.view.lo : null;
   else if (ST.xOff < 0.5) ST.span = null;
@@ -1799,9 +1800,7 @@ $('ctxNow').addEventListener('click', () => {
   if (!ST.span) ST.scaled = false;
   ST.view = null; ST.xOff = 0; hideMenu(); redraw();
 });
-$('ctxAuto').addEventListener('click', () => {
-  ST.view = null; ST.span = null; ST.scaled = false; ST.xOff = 0; autoHalf = 0; autoBucket = 0; hideMenu(); redraw();
-});
+$('ctxAuto').addEventListener('click', () => { hideMenu(); chartDefaults(); });   // 오른쪽 아래 ↺ 버튼과 같은 동작
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMenu(); });
 cv.addEventListener('wheel', hideMenu);
