@@ -10,8 +10,9 @@
 :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--ink:#c9d1d9;--dim:#8b949e;--btn:#21262d;--btn2:#30363d;--bid:#26a69a;--ask:#ef5350}
 :root[data-theme=light]{--bg:#c9cfd5;--panel:#bdc4cb;--line:#a3abb4;--ink:#161a1f;--dim:#2f363d;--btn:#d8dde2;--btn2:#c4cad0}
 *{box-sizing:border-box}
-/* 영문·숫자는 Satoshi, 한글은 나눔스퀘어 네오 (Satoshi에 없는 글자는 다음 글꼴로 넘어감) */
-@font-face{font-family:"NanumSquareNeo";src:url("NanumSquareNeo-Bd.woff2") format("woff2"),url("https://9ggo.github.io/btc-chart/NanumSquareNeo-Bd.woff2") format("woff2");font-weight:100 900;font-display:swap}
+/* 영문·숫자는 Satoshi, 한글은 나눔스퀘어 네오 (Satoshi에 없는 글자는 다음 글꼴로 넘어감)
+   나눔스퀘어 네오는 글자가 기준선보다 낮게 앉아 있어서, 영문과 높이가 맞도록 글자를 위로 6% 올린 파일(v2)을 씀 */
+@font-face{font-family:"NanumSquareNeo";src:url("NanumSquareNeo-Bd-v2.woff2") format("woff2"),url("https://9ggo.github.io/btc-chart/NanumSquareNeo-Bd-v2.woff2") format("woff2");font-weight:100 900;font-display:swap}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 "Satoshi","NanumSquareNeo",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;letter-spacing:-.025em}   /* 두 글꼴 모두 기본 자간이 넓은 편이라 살짝 좁힘 */
 button,select,input{letter-spacing:inherit}
 select,input{font-family:inherit}
