@@ -149,7 +149,7 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:false, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
 // 하단 지표 패널: 순서·접힘·높이 (브라우저에 기억)
-const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'cvd', open:true, h:47 }, { id:'oi', open:true, h:47 }, { id:'cbp', open:true, h:47 }];   // 빨리 변하는 지표일수록 위   // 실제 그래프 높이(패널-2px) 75:75:45:45
+const PANE_DEF = () => [{ id:'vol', open:true, h:62 }, { id:'rsi', open:true, h:77 }, { id:'cvd', open:true, h:62 }, { id:'oi', open:true, h:32 }, { id:'cbp', open:true, h:32 }];   // 빨리 변하는 지표일수록 위   // 실제 그래프 높이(패널-2px) 75:75:45:45
 const PANE_NAME = { vol:'거래량', rsi:'RSI 14', oi:'미결제약정 OI', cbp:'CB 프리미엄', cvd:'CVD' };
 let panes = PANE_DEF();
 try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
@@ -1190,7 +1190,7 @@ function render(){
       ctx.setLineDash([3, 3]); ctx.strokeStyle = T.mute; ctx.globalAlpha = .6;
       for (const lv of [30, 70]){ ctx.beginPath(); ctx.moveTo(0, Y(lv)); ctx.lineTo(cw, Y(lv)); ctx.stroke(); }
       ctx.setLineDash([]); ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(142,91,214,.08)'; ctx.fillRect(0, Y(70), cw, Y(30) - Y(70));
+      ctx.fillStyle = 'rgba(142,91,214,.04)'; ctx.fillRect(0, Y(70), cw, Y(30) - Y(70));
       // 70 넘은 부분(과매수)은 빨강, 30 밑(과매도)은 초록으로 채움 — 제목줄 숫자 색과 같게
       if (pts.length > 1){
         for (const [lv, col, above] of [[70, 'rgba(239,83,80,.45)', true], [30, 'rgba(38,166,154,.45)', false]]){
