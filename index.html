@@ -107,7 +107,7 @@ footer.folded{display:none}
       <div class="row"><dt>거래량</dt><dd>봉마다 거래된 금액(달러)입니다. 오른 봉은 초록, 내린 봉은 빨강입니다.</dd></div>
       <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다.</dd></div>
       <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
-      <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 파랑은 선물, 분홍은 현물입니다. 선물만 오르고 현물이 안 따라오면 레버리지 위주의 움직임입니다.</dd></div>
+      <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 파랑은 선물, 분홍은 현물이며 두 선은 각자 높이를 따로 맞춰 모양을 비교하기 쉽게 그립니다(오른쪽 눈금은 선물 기준). 선물만 오르고 현물이 안 따라오면 레버리지 위주의 움직임입니다.</dd></div>
       <div class="row"><dt>USDT ₩</dt><dd>업비트의 테더 원화 가격입니다. 업비트 연결이 끊기면 빗썸 가격을 씁니다.</dd></div>
       <div class="row"><dt>CB 프리미엄</dt><dd>봉마다 코인베이스 BTC-USD 가격이 바이낸스 현물 BTCUSDT보다 얼마나 비싼지(+) 싼지(−)입니다. 미국 쪽 매수세가 강하면 +로 커지는 경향이 있습니다.</dd></div>
       <div class="row"><dt>ETF</dt><dd>미국 비트코인 현물 ETF 전체의 최근 거래일 순유입(+)·유출(−)입니다. Farside Investors 집계를 하루 세 번 가져옵니다.</dd></div>
@@ -140,7 +140,7 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const ST = { interval:'5m', n:180, dur:900, xOff:0, view:null, bucket:0, range:0, span:null, minQty:0, fut:true, spot:false, liq:true, force:true, shift:0, theme:'light', pal:'bluered' };   // 호가(선물+현물)·청산 표시는 항상 켜짐
 let autoHalf = 0, autoBucket = 0;
 // 하단 지표 패널: 순서·접힘·높이 (브라우저에 기억)
-const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'oi', open:true, h:47 }, { id:'cbp', open:true, h:47 }, { id:'cvd', open:true, h:47 }];   // 실제 그래프 높이(패널-2px) 75:75:45:45
+const PANE_DEF = () => [{ id:'vol', open:true, h:77 }, { id:'rsi', open:true, h:77 }, { id:'cvd', open:true, h:47 }, { id:'oi', open:true, h:47 }, { id:'cbp', open:true, h:47 }];   // 빨리 변하는 지표일수록 위   // 실제 그래프 높이(패널-2px) 75:75:45:45
 const PANE_NAME = { vol:'거래량', rsi:'RSI 14', oi:'미결제약정 OI', cbp:'CB 프리미엄', cvd:'CVD' };
 let panes = PANE_DEF();
 try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
@@ -1113,7 +1113,7 @@ function render(){
       ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
       for (const v of yt){ const yy = Math.round(Y(v)) + .5; if (yy < top2 + 4 || yy > bot2 - 2) continue; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(cw, yy); ctx.stroke(); }
     };
-    let drawn = [], volCols = null;   // 실제로 그린 선의 꼭짓점(화면 좌표) / 거래량 막대 — 커서 점을 그래프 위에 정확히 얹는 데 씀
+    let drawn = [], volCols = null, drawnS = null;   // 실제로 그린 선의 꼭짓점(화면 좌표) / 거래량 막대 — 커서 점을 그래프 위에 정확히 얹는 데 씀
     const line = (pts, col, w = 1.3) => {   // pts: [x, v]
       ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); let lx = -9, started = false; drawn = [];
       for (const [x0, v] of pts){ const x = Math.min(cw, x0); if (started && Math.abs(x - lx) < 1) continue; const yy = Y(v); if (!started){ ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy); lx = x; drawn.push([x, yy]); }
@@ -1210,11 +1210,12 @@ function render(){
         cum += 2 * (c.tq || 0) - (c.qv || 0); pts.push([xOf(i), cum]); cArr[i] = cum;
         const sp = spotOf(c.t); if (sp){ cumS += 2 * sp.tq - sp.qv; hasS = true; } if (hasS){ ptsS.push([xOf(i), cumS]); sArr[i] = cumS; }
       });
-      const all = pts.concat(ptsS).map(p => p[1]);
-      lo2 = Math.min(0, ...all); hi2 = Math.max(0, ...all); const pad = (hi2 - lo2) * .08 || 1; lo2 -= pad; hi2 += pad; grid();
-      ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1;
-      if (ptsS.length) line(ptsS, '#d81b60', 1.4);
-      line(pts, '#1f77d0', 1.5);   // 커서 점은 선물 선 위에
+      // 선마다 따로 높이를 맞춤: 현물은 선물보다 금액이 훨씬 작아 같은 축이면 납작해지므로, 모양(방향·어긋남)을 같은 크기로 비교
+      const rng = a => { let l = Math.min(...a), h = Math.max(...a); const pd = (h - l) * .08 || Math.abs(h) * .01 || 1; return [l - pd, h + pd]; };
+      if (ptsS.length){ [lo2, hi2] = rng(ptsS.map(p => p[1])); line(ptsS, '#d81b60', 1.4); drawnS = drawn; }
+      [lo2, hi2] = rng(pts.map(p => p[1])); grid();   // 오른쪽 눈금은 선물 기준
+      if (lo2 < 0 && hi2 > 0){ ctx.strokeStyle = T.mute; ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(cw, Y(0)); ctx.stroke(); ctx.globalAlpha = 1; }
+      line(pts, '#1f77d0', 1.5);
       const sg = v => (v >= 0 ? '+' : '') + fmt(v);
       { const v = at(cArr), vs = sArr.length ? at(sArr) : null; info = `선물 ${sg(v)} · 현물 ${vs == null ? '…' : sg(vs)}`; }
       if (hIdx >= 0 && cArr[hIdx] != null){ hv = cArr[hIdx]; hTxt = `선물 ${sg(hv)}` + (sArr[hIdx] != null ? ` · 현물 ${sg(sArr[hIdx])}` : ''); }
@@ -1238,6 +1239,12 @@ function render(){
         else for (let k = 1; k < drawn.length; k++){ const [x1, y1] = drawn[k - 1], [x2, y2] = drawn[k]; if (hx <= x2){ vy = y1 + (y2 - y1) * (hx - x1) / ((x2 - x1) || 1); break; } }
       }
       ctx.beginPath(); ctx.arc(hx, vy, 1.5, 0, 7); ctx.fillStyle = T.inkS; ctx.fill();
+      if (drawnS && drawnS.length){   // CVD 현물 선 위에도 점
+        const d = drawnS; let sy = d[0][1];
+        if (hx >= d[d.length - 1][0]) sy = d[d.length - 1][1];
+        else if (hx > d[0][0]) for (let k = 1; k < d.length; k++){ const [x1, y1] = d[k - 1], [x2, y2] = d[k]; if (hx <= x2){ sy = y1 + (y2 - y1) * (hx - x1) / ((x2 - x1) || 1); break; } }
+        ctx.beginPath(); ctx.arc(hx, sy, 1.5, 0, 7); ctx.fillStyle = '#d81b60'; ctx.fill();
+      }
       if (hover.y >= top2 && hover.y <= bot2 + 2){
       ctx.font = '700 11px sans-serif'; const tw = ctx.measureText(hTxt).width;
       const right = hx + 8 + tw + 8 <= cw, bx = right ? hx + 8 : hx - 8 - tw - 8;
