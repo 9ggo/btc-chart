@@ -94,7 +94,7 @@ footer.folded{display:none}
     <label class="switch" title="다크 / 라이트"><span style="display:flex"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span><input id="theme" type="checkbox" role="switch" aria-label="라이트 모드"><i></i><span style="display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg></span></label>
   </div>
 </header>
-<div id="wrap"><canvas id="cv"></canvas><div id="ctx" class="ctxmenu" hidden><button id="ctxNow" type="button">현재로 이동</button><button id="ctxAuto" type="button">차트 기본값으로</button></div><button id="foldAllBtn" type="button" class="mini">지표 모두 접기</button><div class="foot-r"><button id="legendBtn" type="button">설명 접기</button><span id="status">연결 중…</span></div><button id="toNow" type="button" hidden></button></div>
+<div id="wrap"><canvas id="cv"></canvas><div id="ctx" class="ctxmenu" hidden><button id="ctxNow" type="button">현재로 이동</button><button id="ctxAuto" type="button">차트 기본값으로</button></div><button id="foldAllBtn" type="button" class="mini" hidden>지표 모두 접기</button><div class="foot-r"><button id="legendBtn" type="button">설명 접기</button><span id="status">연결 중…</span></div><button id="toNow" type="button" hidden></button></div>
 <footer id="foot">
   <div class="legend">
     <section><h4>화면 구성</h4><dl>
@@ -1108,6 +1108,7 @@ function render(){
   { // 시간축 줄 오른쪽(호가 패널 아래): 지표 전체 접기·펼치기 버튼 — 설명 버튼과 같은 일반 버튼이라 글자 위치가 똑같이 맞음
     const b = $('foldAllBtn'), t = panes.some(p => p.open) ? '지표 모두 접기' : '지표 펼치기';
     if (b.textContent !== t) b.textContent = t;
+    if (b.hidden) b.hidden = false;   // 차트를 처음 그릴 때 자리 잡고 보이게
     b.style.left = Math.round(cw + (W - cw) / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(axTop + AX / 2 - b.offsetHeight / 2) + 'px';
   }
   let py = axTop + AX;
