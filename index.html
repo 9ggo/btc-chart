@@ -1225,7 +1225,7 @@ function render(){
           ctx.save(); ctx.beginPath(); ctx.rect(0, clipY0, cw, clipY1 - clipY0); ctx.clip();
           ctx.beginPath(); ctx.moveTo(pts[0][0], y0v); for (const [x, v] of pts) ctx.lineTo(Math.min(cw, x), Y(v)); ctx.lineTo(Math.min(cw, pts[pts.length - 1][0]), y0v); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
         }
-        line(pts, T.inkS);
+        ctx.globalAlpha = .55; line(pts, T.inkS); ctx.globalAlpha = 1;   // 선은 살짝 연한 무채색
         info = fmt(pts[pts.length - 1][1]); iv = pts[pts.length - 1][1];
         vc = v => v == null ? T.ink : v >= 0 ? '#0f9d58' : '#d93025';   // + 초록, − 빨강 (ETF 박스와 같은 색)
         if (hIdx >= 0 && arr[hIdx] != null){ hv = arr[hIdx]; hTxt = fmt(hv); }
