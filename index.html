@@ -150,6 +150,7 @@ try { const sv = JSON.parse(localStorage.getItem('btcPanes') || 'null');
     PANE_DEF().forEach((d, i) => { if (!ok.some(p => p.id === d.id)) ok.splice(Math.min(i, ok.length), 0, d); });
     if (ok.length) panes = ok;
   } } catch (e){}
+let foldMemo = null;   // 전체 접기 직전에 펼쳐져 있던 지표
 const savePanes = () => { try { localStorage.setItem('btcPanes', JSON.stringify(panes)); } catch (e){} };
 let paneHits = [];
 let hover = null;
@@ -1071,6 +1072,14 @@ function render(){
   paneHits = []; priceTag = null; priceBox = null;
   ctx.fillStyle = T.bg; ctx.fillRect(cw, bot, W - cw, axTop + AX - bot); ctx.fillRect(0, axTop + AX, W, H - axTop - AX);   // 시간축(왼쪽)은 이미 그렸으니 남기고 나머지만
   const nf = v => Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e4 ? Math.round(v).toLocaleString() : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
+  { // 시간축 줄 오른쪽(호가 패널 아래): 지표 전체 접기·펼치기 버튼
+    const anyOpen = panes.some(p => p.open), t = anyOpen ? '지표 모두 접기' : '지표 펼치기', bx = cw + (W - cw) / 2, by = axTop + AX / 2;
+    ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(t).width + 16;
+    ctx.fillStyle = T.lbg; ctx.fillRect(bx - tw / 2, by - 9, tw, 18); ctx.strokeStyle = T.line; ctx.strokeRect(Math.round(bx - tw / 2) + .5, Math.round(by - 9) + .5, Math.round(tw), 18);
+    ctx.fillStyle = T.ink; ctx.fillText(t, bx, by + 1);
+    paneHits.push({ x0:bx - tw / 2, x1:bx + tw / 2, y0:by - 9, y1:by + 9, act:'foldAll', id:panes[0].id });
+  }
   let py = axTop + AX;
   panes.forEach((pn, pi) => {
     const h = paneH(pn), y0 = py, y1 = py + HDR;
@@ -1519,6 +1528,11 @@ cv.addEventListener('pointerdown', e => {
   if (hp){   // 지표 제목줄: ▲▼ = 순서 변경, 제목줄 클릭 = 접기/펼치기, 위아래로 끌기 = 높이 조절
     try { cv.setPointerCapture(e.pointerId); } catch (_){}
     const i = panes.findIndex(p => p.id === hp.id);
+    if (hp.act === 'foldAll'){   // 지표 전체 접기 ↔ 접기 전 상태로 되돌리기
+      if (panes.some(p => p.open)){ foldMemo = panes.filter(p => p.open).map(p => p.id); panes.forEach(p => { p.open = false; }); }
+      else { const m = foldMemo && foldMemo.length ? foldMemo : panes.map(p => p.id); panes.forEach(p => { p.open = m.includes(p.id); }); }
+      savePanes(); redraw(); return;
+    }
     if (hp.act === 'fold'){ panes[i].open = !panes[i].open; savePanes(); redraw(); return; }
     if (hp.act === 'up' || hp.act === 'down'){
       const j = hp.act === 'up' ? i - 1 : i + 1; [panes[i], panes[j]] = [panes[j], panes[i]]; savePanes(); redraw(); return;
