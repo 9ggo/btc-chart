@@ -661,7 +661,7 @@ function render(){
     ctx.fillStyle = T.mute; ctx.font = '14px sans-serif'; ctx.fillText('데이터 불러오는 중…', 16, 30); return;
   }
   const panelW = Math.round(Math.min(320, Math.max(150, W * 0.36)));
-  const AX = 34;   // 하단 시간축 높이 (연도 줄 + 날짜·시각 줄)
+  const AX = 18;   // 하단 시간축 높이 (한 줄로 최소화, 연도는 해가 바뀌는 눈금에 붙여 씀)
   // 지표 패널 높이: 메인 차트가 최소 160px은 남도록 필요하면 비율대로 줄임
   const HDR = 18, nOpen = panes.filter(p => p.open).length;
   const room = Math.max(0, H - AX - 8 - 160 - HDR * panes.length);
@@ -774,8 +774,8 @@ function render(){
       ctx.strokeStyle = T.line; ctx.beginPath(); ctx.moveTo(0, axTop + .5); ctx.lineTo(cw, axTop + .5); ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       for (const k of ticks){
-        if (k.year){ ctx.font = '700 13px sans-serif'; ctx.fillStyle = T.inkS; ctx.fillText(k.year, k.x, axTop + 10); }   // 해가 바뀌는 곳 위에 연도
-        ctx.font = `${k.bold ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold ? T.inkS : T.mute; ctx.fillText(k.txt, k.x, axTop + 25);
+        const tt = k.year ? `${k.year} ${k.txt}` : k.txt;   // 해가 바뀌는 눈금은 연도를 앞에 붙임
+        ctx.font = `${k.bold || k.year ? 700 : 600} 11px sans-serif`; ctx.fillStyle = k.bold || k.year ? T.inkS : T.mute; ctx.fillText(tt, k.x, axTop + AX / 2 + 1);
       }
     });
   }
@@ -1107,9 +1107,9 @@ function render(){
     const anyOpen = panes.some(p => p.open), t = anyOpen ? '지표 모두 접기' : '지표 펼치기', bx = cw + (W - cw) / 2, by = axTop + AX / 2;
     ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const tw = ctx.measureText(t).width + 16;
-    ctx.fillStyle = T.lbg; ctx.fillRect(bx - tw / 2, by - 9, tw, 18); ctx.strokeStyle = T.line; ctx.strokeRect(Math.round(bx - tw / 2) + .5, Math.round(by - 9) + .5, Math.round(tw), 18);
+    ctx.fillStyle = T.lbg; ctx.fillRect(bx - tw / 2, by - 8, tw, 16); ctx.strokeStyle = T.line; ctx.strokeRect(Math.round(bx - tw / 2) + .5, Math.round(by - 8) + .5, Math.round(tw), 15);
     ctx.fillStyle = T.ink; ctx.fillText(t, bx, by + 1);
-    paneHits.push({ x0:bx - tw / 2, x1:bx + tw / 2, y0:by - 9, y1:by + 9, act:'foldAll', id:panes[0].id });
+    paneHits.push({ x0:bx - tw / 2, x1:bx + tw / 2, y0:by - 8, y1:by + 8, act:'foldAll', id:panes[0].id });
   }
   let py = axTop + AX;
   panes.forEach((pn, pi) => {
@@ -1395,10 +1395,10 @@ function render(){
       priceTag = { x0:bx - 2, x1:bx + PW + 1, y0:hover.y - 10, y1:hover.y + 10, val:pv.toFixed(1) };
       priceBox = { x0:bx - 4, x1:bx + tw + 8 + PW + 4, y0:hover.y - 12, y1:hover.y + 12 };
     }
-    { // 시간축의 시각
+    { // 커서 시점 시각: 차트 안쪽 아래에 표시
       const d = new Date(c.t), txt = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; const tw = ctx.measureText(txt).width, tx = Math.max(tw / 2 + 4, Math.min(cw - tw / 2 - 4, hx));
-      ctx.fillStyle = T.ink; ctx.fillRect(tx - tw / 2 - 5, axTop + 4, tw + 10, AX - 8); ctx.fillStyle = T.bg; ctx.fillText(txt, tx, axTop + AX / 2);
+      ctx.fillStyle = T.ink; ctx.fillRect(tx - tw / 2 - 5, bot - 20, tw + 10, 17); ctx.fillStyle = T.bg; ctx.textBaseline = 'middle'; ctx.fillText(txt, tx, bot - 11);
     }
     { // 왼쪽 위: 시가·고가·저가·종가
       const f = v => v.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
