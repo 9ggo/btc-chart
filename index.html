@@ -1063,12 +1063,10 @@ function render(){
     ctx.fillStyle = T.hint; ctx.fillText(t, cw / 2, 16);
   });
   for (const f of L) f();
-  ctx.font = '700 12px sans-serif'; ctx.textAlign = 'right';
+  ctx.font = '700 11px sans-serif'; ctx.textAlign = 'right';
   const pt = P.toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 }), ptw = ctx.measureText(pt).width;
-  const px = Math.round(cw * 0.88 + ptw / 2);   // 차트 오른쪽 부근, 살짝 투명
-  ctx.globalAlpha = 0.72;
+  const px = cw - 4;   // 오른쪽 가격 눈금 자리에 표시 → 최신 캔들을 가리지 않음
   ctx.fillStyle = T.price; ctx.fillRect(px - ptw - 4, yp - 9, ptw + 8, 18);
-  ctx.globalAlpha = 1;
   ctx.fillStyle = T.priceTxt; ctx.fillText(pt, px, yp);
 
   // ---------- 하단 지표 패널 ----------
