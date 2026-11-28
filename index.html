@@ -29,6 +29,9 @@ header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 header .mk{padding:2px 9px;border:1px solid var(--line);border-radius:7px;background:var(--btn);font-size:14px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
 header .mk b{color:var(--ink)}
 header .mk .up{color:#0f9d58}header .mk .dn{color:#d93025}
+#mkEtf{cursor:pointer;position:relative}
+#etfPop{position:fixed;z-index:50;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--btn);box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:13px;font-weight:600;line-height:1.6;white-space:pre;font-variant-numeric:tabular-nums}
+#etfPop .up{color:#0f9d58}#etfPop .dn{color:#d93025}
 header .mk b.fu{color:#e5322d}header .mk b.fd{color:#1f6fe5}
 header .mk b{transition:color .25s}
 header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
@@ -1487,6 +1490,21 @@ function binanceSpotMid(){   // 바이낸스 현물 호가 중간값 (없으면 
   return isFinite(bb) && isFinite(ba) && ba > bb ? (bb + ba) / 2 : lastPrice;
 }
 // 미국 현물 ETF 전일 순유입: GitHub Actions가 하루 세 번 Farside에서 받아 저장한 etf.json을 읽음
+// 최근 5거래일: 탭(터치)·클릭하면 열고 닫음, 마우스는 올리면 열림
+let etfRecent = [], etfPop = null;
+function showEtfPop(on){
+  if (etfPop){ etfPop.remove(); etfPop = null; }
+  if (!on || !etfRecent.length) return;
+  etfPop = document.createElement('div'); etfPop.id = 'etfPop';
+  etfPop.innerHTML = etfRecent.map(r => { const [, m, d] = r.date.split('-'); return `${+m}/${+d} <span class="${r.total >= 0 ? 'up' : 'dn'}">${r.total >= 0 ? '+' : '-'}${Math.round(Math.abs(r.total))}M</span>`; }).join('\n');
+  document.body.appendChild(etfPop);
+  const b = $('mkEtf').getBoundingClientRect(), w = etfPop.offsetWidth;
+  etfPop.style.top = (b.bottom + 6) + 'px'; etfPop.style.left = Math.max(6, Math.min(innerWidth - w - 6, b.left + b.width / 2 - w / 2)) + 'px';
+}
+$('mkEtf').addEventListener('click', e => { e.stopPropagation(); showEtfPop(!etfPop); });
+$('mkEtf').addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') showEtfPop(true); });
+$('mkEtf').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') showEtfPop(false); });
+document.addEventListener('click', () => { if (etfPop) showEtfPop(false); });
 async function loadEtf(){
   for (const u of ['etf.json', 'https://9ggo.github.io/btc-chart/etf.json']){
     try {
@@ -1496,7 +1514,7 @@ async function loadEtf(){
       const amt = a >= 1000 ? '$' + (a / 1000).toFixed(2) + 'B' : '$' + a.toFixed(1) + 'M';
       const [, mm, dd] = last.date.split('-');
       $('mkEtf').innerHTML = `ETF <span style="opacity:.7;font-weight:500">${+mm}/${+dd}</span> <b class="${cls}">${sg}${amt}</b>`;
-      $('mkEtf').title = j.rows.slice(-5).map(r => { const [, m, d] = r.date.split('-'); return `${+m}/${+d} ${r.total >= 0 ? '+' : '-'}${Math.round(Math.abs(r.total))}M`; }).join('\n');
+      etfRecent = j.rows.slice(-5);
       return;
     } catch (e){}
   }
