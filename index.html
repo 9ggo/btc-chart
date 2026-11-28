@@ -106,7 +106,7 @@ footer.folded{display:none}
       <div class="row"><dt>체결</dt><dd>가격이 닿아 실제로 소화된 큰 벽입니다.</dd></div>
       <div class="row"><dt>거래량</dt><dd>봉마다 거래된 금액(달러)입니다. 오른 봉은 초록, 내린 봉은 빨강입니다.</dd></div>
       <div class="row"><dt>RSI 14</dt><dd>최근 14개 봉의 상승·하락 강도입니다. 70 위는 과매수, 30 아래는 과매도 구간으로 봅니다. 초록 선은 상승 다이버전스(가격은 더 낮은 저점, RSI는 더 높은 저점), 빨간 선은 하락 다이버전스입니다. 고점·저점 확인에 5봉이 걸려 그만큼 늦게 나타납니다.</dd></div>
-      <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
+      <div class="row"><dt>미결제약정 OI</dt><dd>아직 정리되지 않은 선물 포지션 총액(달러)입니다. 괄호 안 %는 화면 왼쪽 끝 대비 변화율입니다. 가격과 함께 오르면 새 포지션이 들어오며 움직이는 것이고, 가격은 오르는데 줄면 숏 청산·정리로 오르는 것이라 힘이 약할 수 있습니다. 가격이 내릴 때도 같은 방식으로 봅니다. 바이낸스는 최근 약 30일치만 제공합니다.</dd></div>
       <div class="row"><dt>CVD</dt><dd>화면 왼쪽 끝부터 누적한 시장가 매수 − 시장가 매도 금액(달러)입니다. 파랑은 선물, 분홍은 현물이며 두 선은 각자 높이를 따로 맞춰 모양을 비교하기 쉽게 그립니다(오른쪽 눈금은 선물 기준). 선물만 오르고 현물이 안 따라오면 레버리지 위주의 움직임입니다.</dd></div>
       <div class="row"><dt>CB 프리미엄</dt><dd>코인베이스와 바이낸스 현물의 가격 차이(%)입니다. +가 클수록 미국 쪽 매수세가 강합니다.</dd></div>
       <div class="row"><dt>ETF</dt><dd>미국 비트코인 현물 ETF 전체의 최근 거래일 순유입(+)·유출(−)입니다.</dd></div>
@@ -1203,7 +1203,7 @@ function render(){
         lo2 = Math.min(...pts.map(p => p[1])); hi2 = Math.max(...pts.map(p => p[1])); const pad = (hi2 - lo2) * .1 || hi2 * .001; lo2 -= pad; hi2 += pad; grid();
         line(pts, '#d18b00');
         const b = pts[pts.length - 1][1];
-        if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht && o.t >= t0 - tStep * 2); if (pr.length){ hv = pr[pr.length - 1].v; hTxt = fu(hv); } else hNone = true; }
+        if (hIdx >= 0){ const ht = vis[hIdx].t + tStep; const pr = oiHist.filter(o => o.t <= ht && o.t >= t0 - tStep * 2); if (pr.length){ hv = pr[pr.length - 1].v; const a0 = pts[0][1]; hTxt = `${fu(hv)} (${hv >= a0 ? '+' : ''}${((hv - a0) / a0 * 100).toFixed(2)}%)`; } else hNone = true; }   // 화면 왼쪽 끝 대비 그 봉까지의 변화율
         const a = pts[0][1]; info = `${fu(b)} (${b >= a ? '+' : ''}${((b - a) / a * 100).toFixed(2)}%)`;
       } else info = ST.xOff > 0 ? '이 구간 기록 없음 (최근 약 30일까지만 제공)' : '불러오는 중…';
     } else if (pn.id === 'cbp'){
