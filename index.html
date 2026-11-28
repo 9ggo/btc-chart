@@ -36,7 +36,7 @@ header .ref-rot .ref.on{opacity:1;pointer-events:auto}
 /* 십자선 커서: 라이트=검정, 다크=흰색 */
 :root[data-theme=dark] #cv{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='23' height='23'%3E%3Cpath d='M11.5 0v23M0 11.5h23' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E") 11 11, crosshair;}
 header .mk{padding:2px 9px;border:1px solid var(--line);border-radius:7px;background:var(--btn);font-size:14px;font-weight:600;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
-header .mk b{color:var(--ink)}
+header .mk b{color:var(--ink);font-weight:500}   /* 숫자는 너무 굵지 않게 */
 header .mk .up{color:#0f9d58}header .mk .dn{color:#d93025}
 #mkEtf,#mkUsdt{cursor:pointer}
 #etfPop{position:fixed;z-index:50;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--btn);box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:13px;font-weight:600;line-height:1.6;white-space:pre;font-variant-numeric:tabular-nums}
@@ -881,12 +881,12 @@ function render(){
         const t = `청산 ${o.side === 'L' ? '롱' : '숏'} ${fp(kA * B)}-${fp((kB + 1) * B)}  ${fu(su)}`;
         const font = `${r > .6 ? 700 : 500} ${fs}px sans-serif`;
         ctx.font = font;
-        const tw = ctx.measureText(t).width, xr = cw * 0.75, x = Math.max(2, xr - tw - 8);   // 가로 3/4 지점에서 끝나게
+        const tw = ctx.measureText(t).width, xr = cw * 0.83, x = Math.max(2, xr - tw - 8);   // 가로 83% 지점에서 끝나게
         if (hit(x, xr, ym - fs / 2 - 3, ym + fs / 2 + 3)) continue;
         boxes.push([x, xr, ym - fs / 2 - 3, ym + fs / 2 + 3]); n++;
         L.push(() => {
           ctx.textAlign = 'left'; ctx.font = font;
-          ctx.fillStyle = T.lbg; ctx.fillRect(x, ym - fs / 2 - 2, tw + 8, fs + 4);
+          ctx.globalAlpha = .7; ctx.fillStyle = T.lbg; ctx.fillRect(x, ym - fs / 2 - 2, tw + 8, fs + 4); ctx.globalAlpha = 1;   // 배경은 살짝 비치게
           ctx.fillStyle = liqText(o.side); ctx.fillText(t, x + 4, ym);
         });
       }
