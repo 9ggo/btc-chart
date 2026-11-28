@@ -1105,7 +1105,7 @@ function render(){
     const tw = ctx.measureText(t).width + 16;
     ctx.fillStyle = T.lbg; ctx.fillRect(bx - tw / 2, by - 8, tw, 16); ctx.strokeStyle = T.line; ctx.strokeRect(Math.round(bx - tw / 2) + .5, Math.round(by - 8) + .5, Math.round(tw), 15);
     // 글꼴마다 'middle' 기준선 위치가 달라 실제 글자 높이로 가운데 맞춤
-    { const m = ctx.measureText(t), asc = m.actualBoundingBoxAscent || 8, des = m.actualBoundingBoxDescent || 2; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = T.ink; ctx.fillText(t, bx, by + (asc - des) / 2); ctx.textBaseline = 'middle'; }
+    { const m = ctx.measureText(t), asc = m.actualBoundingBoxAscent || 8, des = m.actualBoundingBoxDescent || 2; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = T.ink; ctx.fillText(t, bx, Math.round(by + (asc - des) / 2) + 1); ctx.textBaseline = 'middle'; }
     paneHits.push({ x0:bx - tw / 2, x1:bx + tw / 2, y0:by - 8, y1:by + 8, act:'foldAll', id:panes[0].id });
   }
   let py = axTop + AX;
